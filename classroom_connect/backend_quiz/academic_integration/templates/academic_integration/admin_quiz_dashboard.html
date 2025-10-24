@@ -1,0 +1,194 @@
+{% extends "academic_integration/base.html" %}
+
+{% block title %}Quiz Management - Staff Dashboard{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h1 class="h2 mb-3">Quiz Management</h1>
+        <p class="lead">Manage quizzes for your courses.</p>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col">
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h5 class="card-title mb-0">Quiz Actions</h5>
+                </div>
+                <a href="{% url 'academic_integration:create_quiz' %}" class="btn btn-success me-2">
+                    <i class="bi bi-plus-circle"></i> Create New Quiz
+                </a>
+                <!-- Simple Quiz Generation link removed -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card shadow-sm">
+    <div class="card-body">
+        <h5 class="card-title">Your Quizzes</h5>
+        {% csrf_token %}
+        
+        {% if quizzes %}
+            {% regroup quizzes by course_id as quizzes_by_course %}
+            {% for course_group in quizzes_by_course %}
+                <div class="mb-4">
+                    <div class="d-flex justify-content-between align-items-center border-bottom pb-2 mb-3">
+                        {% if course_group.grouper %}
+                            <h5>
+                                {% with first_quiz=course_group.list.0 %}
+                                    {% if first_quiz.course_name %}
+                                        {{ first_quiz.course_name }}
+                                    {% endif %}
+                                    (Course ID: {{ course_group.grouper }})
+                                {% endwith %}
+                            </h5>
+                        {% else %}
+                            <h5>Mock Tests / No Course Assigned</h5>
+                        {% endif %}
+                        <span class="badge bg-secondary">{{ course_group.list|length }} quiz{{ course_group.list|length|pluralize }}</span>
+                    </div>
+
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Title</th>
+                                    <th>Course</th>
+                                    <th>Type</th>
+                                    <th>Tutorial</th>
+                                    <th>Created</th>
+                                    <th>Status</th>
+                                    <th>Questions</th>
+                                    <th>Attempts</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for quiz in course_group.list %}
+                                <tr>
+                                    <td>{{ quiz.title }}</td>
+                                    <td>
+                                        {% if quiz.course_name %}
+                                            {{ quiz.course_name }}
+                                        {% else %}
+                                            -
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ quiz.get_quiz_type_display }}</td>
+                                    <td>
+                                        {% if quiz.tutorial_number %}
+                                            Tutorial {{ quiz.tutorial_number }}
+                                        {% else %}
+                                            -
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ quiz.created_at|date:"M d, Y" }}</td>
+                                    <td>
+                                        {% if quiz.is_ended %}
+                                            <span class="badge bg-danger">Ended</span>
+                                        {% elif quiz.is_active %}
+                                            <span class="badge bg-success">Active</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">Inactive</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ quiz.questions.count }}</td>
+                                    <td>
+                                        <span>
+                                            {{ quiz.num_attempts }} attempt{{ quiz.num_attempts|pluralize }}
+                                            {% if quiz.needs_grading %}
+                                                <span class="badge bg-warning text-dark">Needs Grading</span>
+                                            {% endif %}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <div class="btn-group btn-group-sm" role="group">
+                                            <a href="{% url 'academic_integration:quiz_student_performance' quiz.id %}" class="btn btn-primary" title="View student performance">
+                                                <i class="bi bi-people"></i>
+                                            </a>
+                                            <a href="{% url 'academic_integration:quiz_answer_analysis' quiz.id %}" class="btn btn-info" title="Analyze answers">
+                                                <i class="bi bi-bar-chart-fill"></i>
+                                            </a>
+                                            <a href="{% url 'academic_integration:edit_quiz' quiz.id %}" class="btn btn-warning" title="Edit quiz">
+                                                <i class="bi bi-pencil"></i>
+                                            </a>
+                                            {% if not quiz.is_ended %}
+                                                <button type="button" class="btn btn-secondary" onclick="endQuiz('{{ quiz.id }}')" title="End quiz">
+                                                    <i class="bi bi-stop-circle"></i>
+                                                </button>
+                                            {% endif %}
+                                            <button type="button" class="btn btn-danger" onclick="deleteQuiz('{{ quiz.id }}')" title="Delete quiz">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            {% endfor %}
+        {% else %}
+            <div class="alert alert-info">
+                <p>No quizzes created yet.</p>
+                <a href="{% url 'academic_integration:create_quiz' %}" class="btn btn-success me-2">Create your first quiz!</a>
+                <!-- AI-Generated Quiz link removed -->
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+    function deleteQuiz(quizId) {
+        if (confirm('Are you sure you want to delete this quiz? This action cannot be undone.')) {
+            fetch(`/academic_integration/staff/quiz/${quizId}/delete/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                    'Content-Type': 'application/json',
+                },
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    location.reload();
+                } else {
+                    alert('Error deleting quiz: ' + data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while deleting the quiz.');
+            });
+        }
+    }
+    
+    function endQuiz(quizId) {
+        if (confirm('Are you sure you want to end this quiz? Students will no longer be able to take it.')) {
+            fetch(`/academic_integration/api/quiz/${quizId}/end/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                    'Content-Type': 'application/json',
+                },
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    location.reload();
+                } else {
+                    alert('Error ending quiz: ' + data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while ending the quiz.');
+            });
+        }
+    }
+</script>
+{% endblock %}

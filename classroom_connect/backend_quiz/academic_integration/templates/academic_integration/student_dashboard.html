@@ -1,0 +1,213 @@
+{% extends "academic_integration/base.html" %}
+{% block title %}Student Dashboard - {{ student_name }}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>Student Dashboard</h1>
+        <a href="{% url 'academic_integration:student_logout' %}" class="btn btn-outline-danger">
+            <i class="fas fa-sign-out-alt"></i> Logout
+        </a>
+    </div>
+    <div class="row">
+        <div class="col-12">
+            <!-- Fullscreen Error Alert -->
+            <div id="fullscreen-error-alert" class="alert alert-danger alert-dismissible fade show" role="alert" style="display: none;">
+                <i class="fas fa-exclamation-triangle"></i> <strong>Quiz Error:</strong> <span id="fullscreen-error-message"></span>
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+            
+            {% if api_error %}
+                <div class="alert alert-danger">
+                    <i class="fas fa-exclamation-triangle"></i> {{ api_error }}
+                </div>
+            {% endif %}
+            
+            <!-- Welcome Card -->
+            <div class="card mb-4 shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div>
+                            <h2 class="card-title">Welcome, {{ student_name }}!</h2>
+                            <p class="text-muted mb-0">Roll Number: {{ student_roll_number }}</p>
+                        </div>
+                        <div>
+                            <a href="{% url 'academic_integration:student_profile' %}" class="btn btn-outline-primary">
+                                <i class="bi bi-person-circle"></i> Edit Profile
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Active Quizzes Section - Now more prominent -->
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="bi bi-clipboard-check"></i> Available Quizzes ({{ quiz_count|default:"0" }})</h5>
+                    <a href="{% url 'academic_integration:student_quiz_dashboard' %}" class="btn btn-sm btn-light">View All</a>
+                </div>
+                <div class="card-body">
+                    {% if available_quizzes %}
+                        <div class="row">
+                            {% for quiz in available_quizzes %}
+                                <div class="col-md-6 mb-3">
+                                    <div class="card h-100 shadow-sm border-{% if quiz.attempt.completed_at %}success{% elif quiz.attempt %}warning{% else %}primary{% endif %}">
+                                        <div class="card-header bg-{% if quiz.attempt.completed_at %}success{% elif quiz.attempt %}warning{% else %}primary{% endif %} text-white">
+                                            <div class="d-flex justify-content-between">
+                                                <h5 class="mb-0 text-truncate" title="{{ quiz.title }}">{{ quiz.title|truncatechars:30 }}</h5>
+                                                <div>
+                                                    {% if not quiz.is_active %}
+                                                        <span class="badge bg-danger">Inactive</span>
+                                                    {% endif %}
+                                                    {% if quiz.attempt %}
+                                                        {% if quiz.attempt.completed_at %}
+                                                            <span class="badge bg-light text-success">Completed</span>
+                                                        {% else %}
+                                                            <span class="badge bg-light text-warning">In Progress</span>
+                                                        {% endif %}
+                                                    {% endif %}
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="card-body d-flex flex-column">
+                                            <p class="text-muted small">
+                                                Course: {{ quiz.course_name }}<br>
+                                                ID: {{ quiz.id }} | Active: {{ quiz.is_active|yesno:"Yes,No" }}
+                                                {% if debug_mode %}
+                                                <div class="mt-2 small">
+                                                    <span class="badge bg-light text-dark">Status: {{ quiz.visibility_status }}</span>
+                                                    {% if quiz.course_id not in enrolled_courses %}
+                                                    <span class="badge bg-warning text-dark">Not in enrolled courses</span>
+                                                    {% endif %}
+                                                </div>
+                                                {% endif %}
+                                            </p>
+                                            <p class="mb-3">{{ quiz.description|default:""|truncatechars:100 }}</p>
+                                            <div class="mt-auto">
+                                                <div class="d-flex justify-content-between align-items-center">
+                                                    <small>
+                                                        <i class="fas fa-question-circle"></i> {{ quiz.question_count }} Questions
+                                                        {% if quiz.complete_by_date %}
+                                                            <br><i class="fas fa-calendar-alt"></i> Due: {{ quiz.complete_by_date|date:"M d, Y" }}
+                                                        {% endif %}
+                                                    </small>
+                                                    <div>
+                                                        {% if quiz.attempt and quiz.attempt.completed_at and quiz.allow_review %}
+                                                            <a href="{% url 'academic_integration:quiz_result' quiz.id %}" class="btn btn-primary">
+                                                                <i class="fas fa-chart-bar"></i> Results
+                                                            </a>
+                                                        {% else %}
+                                                            <a href="{% url 'academic_integration:quiz_detail' quiz.id %}" class="btn btn-primary">
+                                                                {% if quiz.attempt %}
+                                                                    <i class="fas fa-redo"></i> Continue
+                                                                {% else %}
+                                                                    <i class="fas fa-play"></i> Take Quiz
+                                                                {% endif %}
+                                                            </a>
+                                                        {% endif %}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="text-center py-5">
+                            <i class="fas fa-clipboard-list fa-3x text-muted mb-3"></i>
+                            {% if enrolled_courses %}
+                                <h5>No Active Quizzes</h5>
+                                <p class="text-muted">
+                                    There are no active quizzes assigned to your enrolled courses. 
+                                    Check with your instructor if you believe this is an error.
+                                </p>
+                            {% else %}
+                                <h5>Not Enrolled in Any Courses</h5>
+                                <p class="text-muted">
+                                    You need to be enrolled in courses to see quizzes.
+                                    Contact your instructor if you believe this is an error.
+                                </p>
+                            {% endif %}
+                            <!-- Debug information for administrators -->
+                            {% if request.session.is_admin %}
+                            <div class="alert alert-info mt-3">
+                                <strong>Admin Debug Info:</strong><br>
+                                - Total active quizzes in database: {{ quiz_count|default:"0" }}<br>
+                                - Enrolled courses: {{ enrolled_courses|default:"None" }}
+                            </div>
+                            <div class="mt-3">
+                                <a href="{% url 'academic_integration:admin_quiz_dashboard' %}" class="btn btn-primary">Go to Quiz Management</a>
+                            </div>
+                            {% endif %}
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Enrolled Courses Section - Now styled as cards -->
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="fas fa-book"></i> My Courses</h5>
+                </div>
+                <div class="card-body">
+                    {% if courses %}
+                        <div class="row">
+                            {% for course in courses %}
+                                <div class="col-md-6 mb-3">
+                                    <div class="card h-100 shadow-sm">
+                                        <div class="card-body">
+                                            <h5 class="card-title">{{ course.courseName }}</h5>
+                                            <h6 class="card-subtitle text-muted mb-2">Code: {{ course.courseCode }}</h6>
+                                            <p class="card-text">{{ course.description|default:""|truncatechars:100 }}</p>
+                                            <div class="mt-3">
+                                                <a href="{% url 'academic_integration:course_detail' course_id=course.courseId %}" 
+                                                   class="btn btn-sm btn-outline-primary me-2">
+                                                   <i class="fas fa-info-circle"></i> Course Details & Marks
+                                                </a>
+                                                <a href="{% url 'academic_integration:student_quiz_dashboard' %}?course_id={{ course.courseId }}" 
+                                                   class="btn btn-sm btn-outline-success">
+                                                   <i class="fas fa-clipboard-list"></i> Course Quizzes
+                                                </a>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="text-center py-5">
+                            <i class="fas fa-book fa-3x text-muted mb-3"></i>
+                            <h5>No Courses Found</h5>
+                            <p class="text-muted">You are not enrolled in any courses.</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Check for fullscreen error message from sessionStorage
+    document.addEventListener('DOMContentLoaded', function() {
+        const errorMessage = sessionStorage.getItem('quizError');
+        if (errorMessage) {
+            // Display the error
+            const errorAlert = document.getElementById('fullscreen-error-alert');
+            const errorMessageSpan = document.getElementById('fullscreen-error-message');
+            
+            if (errorAlert && errorMessageSpan) {
+                errorMessageSpan.textContent = errorMessage;
+                errorAlert.style.display = 'block';
+                
+                // Clear the error from sessionStorage
+                sessionStorage.removeItem('quizError');
+                
+                // Auto-scroll to the alert
+                errorAlert.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        }
+    });
+</script>
+{% endblock %}

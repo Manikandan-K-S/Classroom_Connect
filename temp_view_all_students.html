@@ -1,0 +1,193 @@
+{% extends 'academic_integration/base.html' %}
+
+{% block title %}All Students - Classroom Connect{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                <h4 class="mb-0"><i class="bi bi-people"></i> All Students</h4>
+                <div>
+                    <a href="{% url 'academic_integration:create_student' %}" class="btn btn-sm btn-light">
+                        <i class="bi bi-person-plus"></i> Add Student
+                    </a>
+                </div>
+            </div>
+            <div class="card-body">
+                {% if api_error %}
+                <div class="alert alert-danger">
+                    <i class="bi bi-exclamation-triangle"></i> {{ api_error }}
+                </div>
+                {% endif %}
+
+                <!-- Student Filter Form -->
+                <div class="card mb-4 border-light">
+                    <div class="card-header bg-light">
+                        <h5 class="mb-0"><i class="bi bi-funnel"></i> Filter Students</h5>
+                    </div>
+                    <div class="card-body">
+                        <form method="get" class="row g-3">
+                            <div class="col-md-3">
+                                <label for="name" class="form-label">Name</label>
+                                <input type="text" class="form-control" id="name" name="name" value="{{ filters.name }}" placeholder="Filter by name">
+                            </div>
+                            <div class="col-md-3">
+                                <label for="batch" class="form-label">Batch</label>
+                                <select class="form-select" id="batch" name="batch">
+                                    <option value="">All Batches</option>
+                                    {% for batch_option in batches %}
+                                    <option value="{{ batch_option }}" {% if batch_option == filters.batch %}selected{% endif %}>{{ batch_option }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label for="rollno" class="form-label">Roll Number</label>
+                                <input type="text" class="form-control" id="rollno" name="rollno" value="{{ filters.rollno }}" placeholder="Filter by roll number">
+                            </div>
+                            <div class="col-md-3">
+                                <label for="email" class="form-label">Email</label>
+                                <input type="text" class="form-control" id="email" name="email" value="{{ filters.email }}" placeholder="Filter by email">
+                            </div>
+                            <div class="col-12 d-flex justify-content-between">
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="bi bi-search"></i> Apply Filters
+                                </button>
+                                {% if filters_applied %}
+                                <a href="{% url 'academic_integration:view_all_students' %}" class="btn btn-outline-secondary">
+                                    <i class="bi bi-x-circle"></i> Clear Filters
+                                </a>
+                                {% endif %}
+                            </div>
+                        </form>
+                    </div>
+                </div>
+                
+                <!-- Quick Search Bar -->
+                <div class="mb-4">
+                    <div class="input-group">
+                        <span class="input-group-text bg-white">
+                            <i class="bi bi-search"></i>
+                        </span>
+                        <input type="text" id="quickSearch" class="form-control" placeholder="Type to search students...">
+                    </div>
+                    <div class="mt-2 text-muted small">
+                        <span id="studentCounter" class="badge bg-secondary"></span>
+                        {% if filters_applied %}
+                        <span class="ms-2">
+                            Filters applied: 
+                            {% if filters.name %}<span class="badge bg-info me-1">Name: {{ filters.name }}</span>{% endif %}
+                            {% if filters.batch %}<span class="badge bg-info me-1">Batch: {{ filters.batch }}</span>{% endif %}
+                            {% if filters.rollno %}<span class="badge bg-info me-1">Roll No: {{ filters.rollno }}</span>{% endif %}
+                            {% if filters.email %}<span class="badge bg-info me-1">Email: {{ filters.email }}</span>{% endif %}
+                        </span>
+                        {% endif %}
+                    </div>
+                </div>
+
+                {% if students %}
+                <div class="table-responsive">
+                    <table id="studentTable" class="table table-striped table-hover">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Name</th>
+                                <th>Roll Number</th>
+                                <th>Batch</th>
+                                <th>Email</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for student in students %}
+                            <tr>
+                                <td>{{ student.name }}</td>
+                                <td>{{ student.rollno }}</td>
+                                <td>{{ student.batch }}</td>
+                                <td>{{ student.email }}</td>
+                                <td>
+                                    <a href="{% url 'academic_integration:student_detail' student.rollno %}" class="btn btn-sm btn-info">
+                                        <i class="bi bi-info-circle"></i> Details
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle"></i> No students found.
+                </div>
+                {% endif %}
+                
+                <div class="mt-4">
+                    <a href="{% url 'academic_integration:manage_students' %}" class="btn btn-outline-secondary">
+                        <i class="bi bi-arrow-left"></i> Back to Student Management
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Get references to the elements
+        const quickSearchInput = document.getElementById('quickSearch');
+        const studentTable = document.getElementById('studentTable');
+        
+        // Check if the table exists (there might be no students)
+        if (studentTable) {
+            const studentRows = studentTable.querySelectorAll('tbody tr');
+            const studentCounter = document.getElementById('studentCounter');
+            
+            // Initialize student counter
+            updateStudentCounter(studentRows.length, studentRows.length);
+            
+            // Quick search functionality
+            quickSearchInput.addEventListener('keyup', function() {
+                const searchTerm = this.value.toLowerCase();
+                let visibleCount = 0;
+                
+                studentRows.forEach(row => {
+                    const name = row.querySelector('td:nth-child(1)').textContent.toLowerCase();
+                    const rollno = row.querySelector('td:nth-child(2)').textContent.toLowerCase();
+                    const batch = row.querySelector('td:nth-child(3)').textContent.toLowerCase();
+                    const email = row.querySelector('td:nth-child(4)').textContent.toLowerCase();
+                    
+                    // Check if any field matches the search term
+                    if (name.includes(searchTerm) || 
+                        rollno.includes(searchTerm) || 
+                        batch.includes(searchTerm) || 
+                        email.includes(searchTerm)) {
+                        row.style.display = '';
+                        visibleCount++;
+                    } else {
+                        row.style.display = 'none';
+                    }
+                });
+                
+                // Update counter with filtered count
+                updateStudentCounter(visibleCount, studentRows.length);
+            });
+            
+            // Function to update the student counter
+            function updateStudentCounter(visible, total) {
+                if (visible === total) {
+                    studentCounter.textContent = `Showing all ${total} students`;
+                } else {
+                    studentCounter.textContent = `Showing ${visible} of ${total} students`;
+                }
+            }
+        } else {
+            // If no students table, make sure the quick search is disabled
+            if (quickSearchInput) {
+                quickSearchInput.disabled = true;
+                quickSearchInput.placeholder = "No students to search";
+            }
+        }
+    });
+</script>
+{% endblock %}

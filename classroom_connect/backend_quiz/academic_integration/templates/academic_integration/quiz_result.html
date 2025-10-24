@@ -1,0 +1,352 @@
+{% extends "academic_integration/base.html" %}
+{% load custom_filters %}
+
+{% block title %}Quiz Results - {{ quiz.title }}{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{% url 'academic_integration:student_dashboard' %}">Dashboard</a></li>
+                <li class="breadcrumb-item"><a href="{% url 'academic_integration:student_quiz_dashboard' %}">My Quizzes</a></li>
+                <li class="breadcrumb-item active" aria-current="page">Quiz Results</li>
+            </ol>
+        </nav>
+        <h1 class="h2 mb-2">Quiz Results</h1>
+        <h2 class="h4 mb-3 text-primary">{{ quiz.title }}</h2>
+    </div>
+</div>
+
+<div class="card shadow-sm mb-4 border-0">
+    <div class="card-header bg-white border-bottom border-primary">
+        <h5 class="card-title mb-0"><i class="bi bi-clipboard-data me-2"></i>Result Summary</h5>
+    </div>
+    <div class="card-body">
+        {% if quiz_attempt %}
+            <div class="row mb-4">
+                <div class="col-md-3">
+                    <p class="mb-1 text-muted small">Student</p>
+                    <h6 class="fw-bold">{{ student_name|default:student_roll_number }}</h6>
+                    <p class="small text-secondary">{{ student_roll_number }}</p>
+                </div>
+                <div class="col-md-3">
+                    <p class="mb-1 text-muted small">Attempted On</p>
+                    <h6 class="fw-bold">{{ quiz_attempt.started_at|date:"M d, Y" }}</h6>
+                    <p class="small text-secondary">{{ quiz_attempt.started_at|date:"H:i:s" }} hrs</p>
+                </div>
+                <div class="col-md-3">
+                    <p class="mb-1 text-muted small">Completed On</p>
+                    <h6 class="fw-bold">{{ quiz_attempt.completed_at|date:"M d, Y" }}</h6>
+                    <p class="small text-secondary">{{ quiz_attempt.completed_at|date:"H:i:s" }} hrs</p>
+                </div>
+                <div class="col-md-3">
+                    <p class="mb-1 text-muted small">Score</p>
+                                    <p class="text-center">
+                    <strong>{{ quiz_attempt.score }} / {{ total_points }}</strong> points<br>
+                    <small>Total Questions: {{ total_questions }}</small>
+                </p>
+                    {% widthratio quiz_attempt.score total_points 100 as percentage %}
+                    <p class="small text-secondary">{{ percentage }}% score achieved</p>
+                </div>
+            </div>
+            
+            <div class="row mb-4">
+                <div class="col-md-4">
+                    <div class="card h-100 border-0 shadow-sm">
+                        <div class="card-body text-center">
+                            <h5 class="mb-3 text-secondary"><i class="bi bi-percent me-2"></i>Score Percentage</h5>
+                            {% widthratio quiz_attempt.score total_points 100 as percentage %}
+                            <div class="position-relative my-4">
+                                <div class="progress progress-lg">
+                                    <div class="progress-bar bg-primary" 
+                                        role="progressbar" 
+                                        aria-label="Score percentage" 
+                                        aria-valuenow="{{ percentage|floatformat:0 }}" 
+                                        aria-valuemin="0" 
+                                        aria-valuemax="100"
+                                        style="width: {{ percentage }}%;">
+                                        <span class="visually-hidden">{{ percentage }}%</span>
+                                    </div>
+                                </div>
+                                <div class="position-absolute top-50 start-50 translate-middle">
+                                    <div class="display-4 fw-bold">
+                                        {{ percentage }}%
+                                    </div>
+                                </div>
+                            </div>
+                            <p class="text-muted small mt-3">Total percentage scored</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card h-100 border-0 shadow-sm">
+                        <div class="card-body text-center">
+                            <h5 class="mb-3 text-secondary"><i class="bi bi-stopwatch me-2"></i>Time Taken</h5>
+                            <div class="display-4 fw-bold my-4">
+                                {% load math_filters %}
+                                {% with seconds=quiz_attempt.duration_seconds|default:0|floatformat:"0"|add:"0" %}
+                                    {% if seconds > 60 %}
+                                        {{ seconds|intdiv:"60" }} min
+                                        {{ seconds|modulo:"60" }} sec
+                                    {% else %}
+                                        {{ seconds }} sec
+                                    {% endif %}
+                                {% endwith %}
+                            </div>
+                            <p class="text-muted small mt-3">Quiz duration: {{ quiz.duration_minutes }} minutes</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card h-100 border-0 shadow-sm">
+                        <div class="card-body text-center">
+                            <h5 class="mb-3 text-secondary"><i class="bi bi-award me-2"></i>Total Score</h5>
+                            <div class="my-4">
+                                <div class="display-4 fw-bold">{{ quiz_attempt.score }} / {{ total_points }}</div>
+                                <div class="text-muted mt-2">Points earned</div>
+                            </div>
+                            {% if quiz.allow_retake %}
+                                <p class="text-muted small mt-3">You can retake this quiz if needed</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            {% if quiz.show_results %}
+                <hr class="my-4">
+                <h5 class="mb-4 d-flex align-items-center">
+                    <i class="bi bi-question-circle-fill me-2 text-primary"></i>
+                    Question Review
+                    <span class="badge bg-secondary rounded-pill ms-2">{{ total_questions }} Questions</span>
+                </h5>
+                
+                {% if has_no_answers %}
+                <div class="alert alert-warning d-flex align-items-center mb-4">
+                    <i class="bi bi-exclamation-triangle-fill me-3 fs-4"></i>
+                    <div>
+                        <h5 class="alert-heading">No Answers Recorded</h5>
+                        <p class="mb-0">No answers were recorded for this quiz attempt. This may happen if the quiz was submitted without selecting any answers or if there was a technical issue during submission.</p>
+                    </div>
+                </div>
+                {% endif %}
+                
+                {% for question in quiz.questions.all %}
+                    {% if question.id in question_answers %}
+                        {% with ans=question_answers|get_item:question.id %}
+                <div class="card mb-4 shadow-sm border-0">
+                    <div class="card-header d-flex justify-content-between align-items-center bg-light">
+                        <div>
+                            <span class="fw-bold">Question {{ forloop.counter }}</span>
+                            <span class="text-muted ms-2">
+                                {% if question.question_type == 'mcq_single' %}
+                                    (Multiple Choice - Single Answer)
+                                {% elif question.question_type == 'mcq_multiple' %}
+                                    (Multiple Choice - Multiple Answers)
+                                {% elif question.question_type == 'text' %}
+                                    (Text Input)
+                                {% elif question.question_type == 'true_false' %}
+                                    (True/False)
+                                {% endif %}
+                            </span>
+                        </div>
+                        <div class="badge bg-primary p-2">
+                            <i class="bi bi-star-fill me-1"></i>
+                            Points: {{ ans.points_earned }} / {{ question.points }}
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="question-text mb-4 p-3 bg-light rounded">
+                            <p class="card-text fw-bold mb-0">{{ question.text }}</p>
+                        </div>
+                        
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <div class="p-3 rounded border {% if ans.is_correct %}border-success{% else %}border-danger{% endif %}">
+                                    <h6 class="d-flex align-items-center mb-3">
+                                        <i class="bi bi-person-fill me-2"></i>
+                                        Your Answer:
+                                        {% if ans.is_correct %}
+                                            <span class="badge bg-success ms-auto">Correct</span>
+                                        {% else %}
+                                            <span class="badge bg-danger ms-auto">Incorrect</span>
+                                        {% endif %}
+                                    </h6>
+                                    <div class="mt-2">
+                                        {% if question.question_type == 'mcq_single' or question.question_type == 'mcq_multiple' %}
+                                            {% for choice in ans.selected_choices.all %}
+                                                <div class="choice-item {% if choice.is_correct %}choice-correct{% else %}choice-incorrect{% endif %}">
+                                                    <i class="bi {% if choice.is_correct %}bi-check-circle-fill text-success{% else %}bi-x-circle-fill text-danger{% endif %}"></i>
+                                                    <span>{{ choice.text }}</span>
+                                                </div>
+                                            {% empty %}
+                                                <div class="alert alert-warning mb-0">
+                                                    <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                                                    No answer provided
+                                                </div>
+                                            {% endfor %}
+                                        {% elif question.question_type == 'text' %}
+                                            <div class="choice-item {% if ans.is_correct %}choice-correct{% else %}choice-incorrect{% endif %}">
+                                                "{{ ans.text_answer|default:"No answer provided" }}"
+                                            </div>
+                                        {% elif question.question_type == 'true_false' %}
+                                            <div class="choice-item {% if ans.is_correct %}choice-correct{% else %}choice-incorrect{% endif %}">
+                                                <i class="bi {% if ans.boolean_answer %}bi-check-square{% else %}bi-x-square{% endif %}"></i>
+                                                {{ ans.boolean_answer|yesno:"True,False" }}
+                                            </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="p-3 rounded border border-success">
+                                    <h6 class="d-flex align-items-center mb-3">
+                                        <i class="bi bi-check-circle-fill me-2 text-success"></i>
+                                        Correct Answer:
+                                    </h6>
+                                    <div class="mt-2">
+                                        {% if question.question_type == 'mcq_single' or question.question_type == 'mcq_multiple' %}
+                                            {% for choice in question.choices.all %}
+                                                {% if choice.is_correct %}
+                                                    <div class="choice-item choice-correct">
+                                                        <i class="bi bi-check-circle-fill text-success"></i>
+                                                        {{ choice.text }}
+                                                    </div>
+                                                {% endif %}
+                                            {% endfor %}
+                                        {% elif question.question_type == 'text' %}
+                                            <div class="choice-item choice-correct">
+                                                "{{ question.correct_answer }}"
+                                            </div>
+                                        {% elif question.question_type == 'true_false' %}
+                                            <div class="choice-item choice-correct">
+                                                <i class="bi {% if question.correct_answer %}bi-check-square{% else %}bi-x-square{% endif %}"></i>
+                                                {{ question.correct_answer|yesno:"True,False" }}
+                                            </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        {% if question.explanation %}
+                            <div class="explanation-block">
+                                <h6 class="d-flex align-items-center">
+                                    <i class="bi bi-info-circle-fill me-2 text-info"></i>
+                                    Explanation:
+                                </h6>
+                                <p class="mt-2 mb-0">{{ question.explanation }}</p>
+                            </div>
+                        {% endif %}
+                        
+                        {% if ans.feedback %}
+                        <div class="mt-4 d-flex justify-content-end align-items-center">
+                            <div class="text-secondary">
+                                <small>
+                                    <i class="bi bi-chat-left-text-fill me-1"></i>
+                                    Instructor feedback: {{ ans.feedback }}
+                                </small>
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+                        {% endwith %}
+                    {% endif %}
+                {% endfor %}
+            {% else %}
+                <div class="alert alert-info d-flex align-items-center">
+                    <i class="bi bi-info-circle-fill me-3 fs-4"></i>
+                    <div>
+                        <h5 class="alert-heading">Results Not Available</h5>
+                        <p class="mb-0">Detailed results for this quiz are not available for review. This may be due to instructor settings or the quiz policy.</p>
+                    </div>
+                </div>
+            {% endif %}
+            
+        {% else %}
+            <div class="alert alert-warning d-flex align-items-center">
+                <i class="bi bi-exclamation-triangle-fill me-3 fs-4"></i>
+                <div>
+                    <h5 class="alert-heading">No Attempt Found</h5>
+                    <p class="mb-0">No quiz attempt found for this quiz. Please contact your instructor if you believe this is an error.</p>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+    <div class="card-footer bg-white py-3">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <a href="{% url 'academic_integration:student_quiz_dashboard' %}" class="btn btn-outline-secondary">
+                    <i class="bi bi-arrow-left me-1"></i> Back to Quizzes
+                </a>
+            </div>
+            <div>
+                {% if quiz_attempt and quiz.allow_retake %}
+                    <a href="{% url 'academic_integration:quiz_detail' quiz.id %}" class="btn btn-primary">
+                        <i class="bi bi-arrow-repeat me-1"></i> Retake Quiz
+                    </a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if quiz_attempt %}
+<div class="card shadow-sm border-0 mb-4">
+    <div class="card-body">
+        <h5 class="d-flex align-items-center mb-3">
+            <i class="bi bi-info-circle-fill me-2 text-primary"></i>
+            Quiz Information
+        </h5>
+        <table class="table table-sm quiz-info-table">
+            <tbody>
+                <tr>
+                    <th>Quiz Type:</th>
+                    <td>
+                        {% if quiz.quiz_type == 'tutorial' %}
+                            <span class="badge bg-info">Tutorial Quiz</span>
+                        {% elif quiz.quiz_type == 'mock' %}
+                            <span class="badge bg-warning">Mock Test</span>
+                        {% elif quiz.quiz_type == 'exam' %}
+                            <span class="badge bg-danger">Examination</span>
+                        {% endif %}
+                        {% if quiz.tutorial_number %}
+                            <span class="text-muted ms-2">Tutorial #{{ quiz.tutorial_number }}</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                <tr>
+                    <th>Course:</th>
+                    <td>{{ quiz.course_name|default:quiz.course_id }}</td>
+                </tr>
+                <tr>
+                    <th>Duration:</th>
+                    <td>{{ quiz.duration_minutes }} minutes</td>
+                </tr>
+                <tr>
+                    <th>Maximum Points:</th>
+                    <td>{{ quiz.total_points }} points</td>
+                </tr>
+                <tr>
+                    <th>Total Questions:</th>
+                    <td>{{ quiz_attempt.total_questions }}</td>
+                </tr>
+                <tr>
+                    <th>Description:</th>
+                    <td>{{ quiz.description|default:"No description provided" }}</td>
+                </tr>
+                <tr>
+                    <th>Your Score:</th>
+                    <td>
+                        {{ quiz_attempt.score }} out of {{ total_points }} ({% widthratio quiz_attempt.score total_points 100 %}%)
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}

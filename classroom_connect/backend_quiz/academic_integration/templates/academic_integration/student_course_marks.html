@@ -1,0 +1,171 @@
+{% extends 'academic_integration/base.html' %}
+{% load static %}
+{% load math_filters %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'academic_integration/css/course_marks.css' %}">
+{% endblock %}
+
+{% block title %}{{ course.courseName }} Marks - Classroom Connect{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <!-- Breadcrumb Navigation -->
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            {% if is_staff_view %}
+                <li class="breadcrumb-item"><a href="{% url 'academic_integration:staff_dashboard' %}">Staff Dashboard</a></li>
+                <li class="breadcrumb-item"><a href="{% url 'academic_integration:student_detail' student_roll_number %}">Student Details</a></li>
+                <li class="breadcrumb-item active" aria-current="page">{{ course.courseName }} Marks</li>
+            {% else %}
+                <li class="breadcrumb-item"><a href="{% url 'academic_integration:student_dashboard' %}">Dashboard</a></li>
+                <li class="breadcrumb-item active" aria-current="page">{{ course.courseName }} Marks</li>
+            {% endif %}
+        </ol>
+    </nav>
+    
+    <!-- Course Header -->
+    <div class="row mb-4">
+        <div class="col-md-8">
+            {% if is_staff_view %}
+                <div class="alert alert-info mb-3">
+                    <i class="bi bi-info-circle-fill me-2"></i> 
+                    You are viewing student performance for <strong>{{ student_name }} ({{ student_roll_number }})</strong>
+                </div>
+            {% endif %}
+            <h1>{{ course.courseName }}</h1>
+            <p class="lead">Course Code: {{ course.courseId }}</p>
+        </div>
+        <div class="col-md-4 text-right">
+            <div class="card bg-light">
+                <div class="card-body text-center">
+                    <h2 class="display-4 mb-0">{{ overall_percentage|floatformat:1 }}%</h2>
+                    <p class="lead mb-0">Overall Grade: <strong>{{ grade }}</strong></p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    {% if api_error %}
+        <div class="alert alert-warning">
+            <i class="fas fa-exclamation-triangle"></i> {{ api_error }}
+        </div>
+    {% endif %}
+    
+    <!-- Marks Components Section -->
+    <div class="card mb-4">
+        <div class="card-header bg-primary text-white">
+            <h2 class="h4 mb-0">Course Components & Marks</h2>
+        </div>
+        <div class="card-body">
+            {% if component_details %}
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead class="thead-light">
+                            <tr>
+                                <th>Component</th>
+                                <th>Type</th>
+                                <th>Score</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for component in component_details %}
+                                <tr>
+                                    <td>{{ component.name }}</td>
+                                    <td><span class="badge badge-info">{{ component.type }}</span></td>
+                                    <td>{{ component.score|floatformat:1 }}</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                        <tfoot class="thead-light">
+                            <tr>
+                                <th colspan="2">Overall Grade</th>
+                                <th>{{ grade }}</th>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+                <div class="alert alert-info mt-3">
+                    <i class="fas fa-info-circle"></i> Note: The marks for each component may be weighted differently in the final grading. Please consult your course instructor for details about the grading scheme.
+                </div>
+            {% else %}
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle"></i> No marks components found for this course.
+                </div>
+            {% endif %}
+        </div>
+    </div>
+    
+    <!-- Quiz Attempts Section -->
+    <div class="card mb-4">
+        <div class="card-header bg-primary text-white">
+            <h2 class="h4 mb-0">Quiz Attempts</h2>
+        </div>
+        <div class="card-body">
+            {% if quiz_attempts %}
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead class="thead-light">
+                            <tr>
+                                <th>Quiz Name</th>
+                                <th>Score</th>
+                                <th>Maximum</th>
+                                <th>Percentage</th>
+                                <th>Date Completed</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for attempt in quiz_attempts %}
+                                <tr>
+                                    <td>{{ attempt.quiz_title }}</td>
+                                    <td>{{ attempt.score|floatformat:1 }}</td>
+                                    <td>{{ attempt.total_points|floatformat:1 }}</td>
+                                    <td>
+                                        <div class="progress">
+                                            {% with percentage=attempt.percentage|floatformat:0 %}
+                                            <div class="custom-progress-bar
+                                                {% if attempt.percentage >= 90 %}custom-progress-bar-success
+                                                {% elif attempt.percentage >= 70 %}custom-progress-bar-info
+                                                {% elif attempt.percentage >= 60 %}custom-progress-bar-warning
+                                                {% else %}custom-progress-bar-danger{% endif %}"
+                                                title="Quiz score: {{ attempt.percentage|floatformat:1 }}%"
+                                                style="width: {{ percentage }}%">
+                                                {{ attempt.percentage|floatformat:1 }}%
+                                            </div>
+                                            {% endwith %}
+                                        </div>
+                                    </td>
+                                    <td>{{ attempt.completed_at|date:"M d, Y H:i" }}</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle"></i> No quiz attempts found for this course.
+                </div>
+            {% endif %}
+        </div>
+    </div>
+    
+    <!-- Notes about marks -->
+    <div class="card mb-4">
+        <div class="card-header bg-primary text-white">
+            <h2 class="h4 mb-0">Additional Information</h2>
+        </div>
+        <div class="card-body">
+            <p>Your course instructor may scale or weight marks differently in the final grade calculation. For example, tutorial marks may be scaled to a different maximum mark than what is shown here.</p>
+            <p>For more information about the grading scheme, please consult your course instructor or the course syllabus.</p>
+            
+            {% if is_staff_view %}
+            <div class="mt-4">
+                <a href="{% url 'academic_integration:student_detail' student_roll_number %}" class="btn btn-outline-secondary">
+                    <i class="bi bi-arrow-left"></i> Back to Student Details
+                </a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

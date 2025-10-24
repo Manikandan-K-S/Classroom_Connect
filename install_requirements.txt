@@ -1,0 +1,2 @@
+# Add Gemini API libraries to requirements.txt
+pip install python-dotenv PyPDF2 python-docx

@@ -1,0 +1,59 @@
+{% extends 'academic_integration/base.html' %}
+
+{% block title %}Bulk Add Students - Classroom Connect{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h4 class="mb-0"><i class="bi bi-file-earmark-spreadsheet"></i> Bulk Add Students from CSV</h4>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info">
+                    <h5><i class="bi bi-info-circle"></i> CSV Format Instructions</h5>
+                    <p>Your CSV file should include the following columns:</p>
+                    <ul>
+                        <li><strong>rollno</strong>: Student roll number (e.g., 24MX112)</li>
+                        <li><strong>name</strong>: Student full name</li>
+                        <li><strong>batch</strong>: Student batch (e.g., 24MXG1)</li>
+                        <li><strong>email</strong>: Student email address</li>
+                        <li><strong>password</strong>: Optional. If not provided, roll number will be used as password</li>
+                    </ul>
+                    <p>Example CSV format:</p>
+                    <pre>{{ csv_template }}</pre>
+                </div>
+                
+                <form method="post" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    
+                    {% if form.non_field_errors %}
+                    <div class="alert alert-danger">
+                        {% for error in form.non_field_errors %}
+                        {{ error }}
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                    
+                    <div class="mb-4">
+                        <label for="{{ form.csv_file.id_for_label }}" class="form-label">{{ form.csv_file.label }}</label>
+                        {{ form.csv_file }}
+                        {% if form.csv_file.errors %}
+                        <div class="text-danger">
+                            {% for error in form.csv_file.errors %}
+                            {{ error }}
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-primary"><i class="bi bi-upload"></i> Upload and Process CSV</button>
+                        <a href="{% url 'academic_integration:manage_students' %}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left"></i> Back</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

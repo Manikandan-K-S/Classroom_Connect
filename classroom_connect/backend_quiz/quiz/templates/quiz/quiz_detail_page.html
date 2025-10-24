@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ quiz.title }} - Classroom Connect</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        #fullscreen-warning {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(255, 0, 0, 0.9);
+            z-index: 9999;
+            color: white;
+            text-align: center;
+            padding-top: 20%;
+            font-size: 24px;
+            font-weight: bold;
+        }
+        
+        #fullscreen-warning button {
+            margin-top: 20px;
+            padding: 10px 20px;
+            background-color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        
+        .countdown {
+            margin-top: 20px;
+            font-size: 18px;
+        }
+        
+        #countdown {
+            font-size: 24px;
+            font-weight: bold;
+        }
+        
+        #fullscreen-prompt {
+            text-align: center;
+            padding: 50px 20px;
+        }
+        
+        #fullscreen-prompt h2 {
+            margin-bottom: 20px;
+            color: #333;
+        }
+        
+        #fullscreen-prompt p {
+            margin-bottom: 30px;
+            color: #666;
+            font-size: 1.1rem;
+            line-height: 1.5;
+        }
+        
+        #start-fullscreen-btn {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            border-radius: 30px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 5px 15px rgba(40, 167, 69, 0.3);
+        }
+        
+        #start-fullscreen-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 8px 25px rgba(40, 167, 69, 0.4);
+        }
+        
+        #quiz-content {
+            display: none;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 2.2rem;
+            margin-bottom: 10px;
+        }
+        
+        .header p {
+            font-size: 1rem;
+            opacity: 0.9;
+        }
+        
+        .content {
+            padding: 40px;
+        }
+        
+        .quiz-form {
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        
+        .question {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 25px;
+            margin-bottom: 25px;
+            border-left: 4px solid #4facfe;
+        }
+        
+        .question h3 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 1.2rem;
+            line-height: 1.5;
+        }
+        
+        .choices {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        
+        .choice {
+            display: flex;
+            align-items: center;
+            padding: 15px;
+            background: white;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .choice:hover {
+            border-color: #4facfe;
+            background: #f0f8ff;
+        }
+        
+        .choice input[type="radio"] {
+            margin-right: 15px;
+            transform: scale(1.2);
+        }
+        
+        .choice label {
+            cursor: pointer;
+            flex: 1;
+            color: #333;
+            font-weight: 500;
+        }
+        
+        .submit-section {
+            text-align: center;
+            margin-top: 40px;
+            padding-top: 30px;
+            border-top: 2px solid #e9ecef;
+        }
+        
+        .submit-btn, .nav-btn {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            border-radius: 30px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 5px 15px rgba(40, 167, 69, 0.3);
+            margin: 0 10px;
+        }
+        
+        .nav-btn {
+            background: linear-gradient(135deg, #6c757d 0%, #495057 100%);
+            box-shadow: 0 5px 15px rgba(108, 117, 125, 0.3);
+        }
+        
+        .nav-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 8px 25px rgba(108, 117, 125, 0.4);
+        }
+        
+        .submit-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 8px 25px rgba(40, 167, 69, 0.4);
+        }
+        
+        .submit-btn:disabled, .nav-btn:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        
+        .back-btn {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 25px;
+            text-decoration: none;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+        
+        .back-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: scale(1.05);
+        }
+        
+        .progress-bar {
+            background: #e9ecef;
+            height: 6px;
+            border-radius: 3px;
+            margin-bottom: 30px;
+            overflow: hidden;
+        }
+        
+        .progress-fill {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            height: 100%;
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+        
+        .question-counter {
+            text-align: center;
+            color: #666;
+            margin-bottom: 20px;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <a href="{% url 'student_dashboard' %}" class="back-btn" id="back-btn">← Back to Dashboard</a>
+    
+    <div id="fullscreen-warning">
+        <div>
+            <h2>⚠️ WARNING: FULLSCREEN MODE REQUIRED ⚠️</h2>
+            <p>You have exited fullscreen mode. The quiz will be automatically submitted if you don't return to fullscreen.</p>
+            <p>To continue the quiz, please click the button below:</p>
+            <button id="return-to-fullscreen">Return to Fullscreen Mode</button>
+            <p class="countdown">Auto-submitting in <span id="countdown">10</span> seconds...</p>
+        </div>
+    </div>
+    
+    <div class="container">
+        <div class="header">
+            <h1>{{ quiz.title }}</h1>
+            <p>Answer all questions to complete the quiz</p>
+        </div>
+        
+        <div id="fullscreen-prompt">
+            <h2>This quiz must be taken in fullscreen mode</h2>
+            <p>To begin the quiz, click the button below to enter fullscreen mode. Exiting fullscreen during the quiz will result in automatic submission.</p>
+            <button id="start-fullscreen-btn">
+                Start Quiz in Fullscreen Mode
+            </button>
+        </div>
+        
+        <div class="content" id="quiz-content">
+            <div class="question-counter">
+                Question <span id="current-question">1</span> of {{ questions.count }}
+            </div>
+            
+            <div class="progress-bar">
+                <div class="progress-fill" id="progress-fill"></div>
+            </div>
+            
+            <form class="quiz-form" id="quiz-form">
+                {% csrf_token %}
+                {% for question in questions %}
+                <div class="question" data-question="{{ forloop.counter }}" style="{% if forloop.counter != 1 %}display: none;{% endif %}">
+                    <h3>{{ question.text }}</h3>
+                    <div class="choices">
+                        {% if question.question_type == 'text' %}
+                            <div class="choice">
+                                <input type="text" 
+                                       name="question_{{ question.id }}" 
+                                       id="question_{{ question.id }}_text"
+                                       placeholder="Enter your answer"
+                                       required>
+                            </div>
+                        {% elif question.question_type == 'mcq_multiple' %}
+                            {% for choice in question.choices.all %}
+                            <div class="choice">
+                                <input type="checkbox" 
+                                       name="question_{{ question.id }}" 
+                                       value="{{ choice.id }}" 
+                                       id="choice_{{ choice.id }}">
+                                <label for="choice_{{ choice.id }}">{{ choice.text }}</label>
+                            </div>
+                            {% endfor %}
+                        {% elif question.question_type == 'true_false' %}
+                            {% for choice in question.choices.all %}
+                            <div class="choice">
+                                <input type="radio" 
+                                       name="question_{{ question.id }}" 
+                                       value="{{ choice.id }}" 
+                                       id="choice_{{ choice.id }}"
+                                       required>
+                                <label for="choice_{{ choice.id }}">{{ choice.text }}</label>
+                            </div>
+                            {% endfor %}
+                        {% else %}
+                            {% for choice in question.choices.all %}
+                            <div class="choice">
+                                <input type="radio" 
+                                       name="question_{{ question.id }}" 
+                                       value="{{ choice.id }}" 
+                                       id="choice_{{ choice.id }}"
+                                       required>
+                                <label for="choice_{{ choice.id }}">{{ choice.text }}</label>
+                            </div>
+                            {% endfor %}
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+                
+                <div class="submit-section">
+                    <button type="button" id="prev-btn" class="nav-btn" style="display: none;">Previous Question</button>
+                    <button type="button" id="next-btn" class="nav-btn" style="display: none;">Next Question</button>
+                    <button type="submit" id="submit-btn" class="submit-btn" style="display: none;">Submit Quiz</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <script>
+        let currentQuestion = 1;
+        const totalQuestions = {{ questions.count }};
+        const progressBar = document.getElementById('progress-fill');
+        const currentQuestionSpan = document.getElementById('current-question');
+        const prevBtn = document.getElementById('prev-btn');
+        const nextBtn = document.getElementById('next-btn');
+        const submitBtn = document.getElementById('submit-btn');
+        
+        function updateProgress() {
+            const progress = (currentQuestion / totalQuestions) * 100;
+            progressBar.style.width = progress + '%';
+            currentQuestionSpan.textContent = currentQuestion;
+        }
+        
+        function showQuestion(questionNum) {
+            // Hide all questions
+            document.querySelectorAll('.question').forEach(q => {
+                q.style.display = 'none';
+            });
+            
+            // Show current question
+            document.querySelector(`[data-question="${questionNum}"]`).style.display = 'block';
+            
+            // Update buttons
+            if (questionNum === 1) {
+                // First question
+                prevBtn.style.display = 'none';
+                if (totalQuestions > 1) {
+                    nextBtn.style.display = 'inline-block';
+                    submitBtn.style.display = 'none';
+                } else {
+                    nextBtn.style.display = 'none';
+                    submitBtn.style.display = 'inline-block';
+                }
+            } else if (questionNum < totalQuestions) {
+                // Middle questions
+                prevBtn.style.display = 'inline-block';
+                nextBtn.style.display = 'inline-block';
+                submitBtn.style.display = 'none';
+            } else {
+                // Last question
+                prevBtn.style.display = 'inline-block';
+                nextBtn.style.display = 'none';
+                submitBtn.style.display = 'inline-block';
+            }
+            
+            updateProgress();
+        }
+        
+        function nextQuestion() {
+            if (currentQuestion < totalQuestions) {
+                currentQuestion++;
+                showQuestion(currentQuestion);
+            }
+        }
+        
+        function previousQuestion() {
+            if (currentQuestion > 1) {
+                currentQuestion--;
+                showQuestion(currentQuestion);
+            }
+        }
+        
+        // Event listeners
+        nextBtn.addEventListener('click', nextQuestion);
+        prevBtn.addEventListener('click', previousQuestion);
+        
+        // Note: Automatic progression has been removed
+        // Users must now click Next Question button to proceed
+        
+        // Submit quiz function
+        function submitQuiz() {
+            const form = document.getElementById('quiz-form');
+            const formData = new FormData(form);
+            const answers = {};
+            
+            // Collect all answers
+            for (let [key, value] of formData.entries()) {
+                if (key.startsWith('question_')) {
+                    if (answers[key]) {
+                        // Handle multiple choice questions
+                        if (Array.isArray(answers[key])) {
+                            answers[key].push(value);
+                        } else {
+                            answers[key] = [answers[key], value];
+                        }
+                    } else {
+                        answers[key] = value;
+                    }
+                }
+            }
+            
+            // Submit to API
+            fetch('/api/results/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                },
+                body: JSON.stringify({
+                    quiz_id: {{ quiz.id }},
+                    answers: answers
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    alert('Error: ' + data.error);
+                } else {
+                    // Replace current history entry with results page to prevent back navigation issues
+                    const url = new URL(window.location.origin + '{% url "quiz_result_page" quiz.id %}');
+                    url.searchParams.set('score', data.percentage);
+                    url.searchParams.set('correct', data.correct_answers);
+                    url.searchParams.set('total', data.total_questions);
+                    window.location.replace(url.toString());
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while submitting the quiz.');
+            });
+        }
+        
+        // Update submit button click handler
+        document.getElementById('submit-btn').addEventListener('click', function(e) {
+            e.preventDefault();
+            submitQuiz();
+        });
+        
+        // Clear navigation history when starting a new quiz
+        function clearNavigationHistory() {
+            // Replace current history entry to prevent going back to previous quiz results
+            if (window.history.replaceState) {
+                window.history.replaceState({page: 'quiz-taking', quizId: {{ quiz.id }}}, '', window.location.href);
+            }
+        }
+        
+        // Clear navigation history when starting a new quiz
+        window.addEventListener('load', function() {
+            clearNavigationHistory();
+            
+            // Auto-start fullscreen for quiz URLs
+            const urlPath = window.location.pathname;
+            console.log('Current URL path:', urlPath);
+            
+            if (urlPath.includes('/academic_integration/quiz/') || urlPath.includes('/quiz/')) {
+                console.log('Detected quiz URL, starting fullscreen mode');
+                // Show brief message and start fullscreen
+                setTimeout(() => {
+                    alert("This quiz requires fullscreen mode. Click OK to begin.");
+                    startFullscreenQuiz();
+                }, 100);
+            }
+        });
+        
+        // Initialize
+        showQuestion(1);
+        
+        // Fullscreen Mode Implementation
+        let isFullScreen = false;
+        let countdownInterval;
+        let countdownTime = 10;
+        const countdownElement = document.getElementById('countdown');
+        const fullscreenWarning = document.getElementById('fullscreen-warning');
+        const returnToFullscreenButton = document.getElementById('return-to-fullscreen');
+        
+        // Function to check if in fullscreen mode
+        function isInFullScreen() {
+            return !!(document.fullscreenElement || document.mozFullScreenElement || 
+                      document.webkitFullscreenElement || document.msFullscreenElement);
+        }
+        
+        // Function to enter fullscreen
+        function enterFullscreen() {
+            console.log('Attempting to enter fullscreen mode');
+            const docElm = document.documentElement;
+            
+            if (docElm.requestFullscreen) {
+                docElm.requestFullscreen().then(() => {
+                    console.log('Fullscreen entered successfully');
+                }).catch((error) => {
+                    console.error('Failed to enter fullscreen:', error);
+                });
+            } else if (docElm.mozRequestFullScreen) {
+                docElm.mozRequestFullScreen();
+            } else if (docElm.webkitRequestFullscreen) {
+                docElm.webkitRequestFullscreen();
+            } else if (docElm.msRequestFullscreen) {
+                docElm.msRequestFullscreen();
+            }
+        }
+        
+        // Function to handle fullscreen change
+        function handleFullscreenChange() {
+            isFullScreen = isInFullScreen();
+            console.log('Fullscreen change detected. Is fullscreen:', isFullScreen);
+            
+            if (!isFullScreen) {
+                // User has exited fullscreen mode - show warning and start countdown
+                console.log('User exited fullscreen, showing warning');
+                fullscreenWarning.style.display = 'block';
+                
+                countdownTime = 10;
+                countdownElement.textContent = countdownTime;
+                
+                countdownInterval = setInterval(() => {
+                    countdownTime--;
+                    countdownElement.textContent = countdownTime;
+                    console.log('Countdown:', countdownTime);
+                    
+                    if (countdownTime <= 0) {
+                        clearInterval(countdownInterval);
+                        console.log('Auto-submitting quiz due to fullscreen exit');
+                        submitQuiz();
+                    }
+                }, 1000);
+            } else {
+                // User has entered fullscreen mode
+                console.log('User entered fullscreen mode');
+                fullscreenWarning.style.display = 'none';
+                clearInterval(countdownInterval);
+            }
+        }
+        
+        // Function to start quiz in fullscreen mode
+        function startFullscreenQuiz() {
+            console.log('Starting fullscreen quiz');
+            enterFullscreen();
+            document.getElementById('fullscreen-prompt').style.display = 'none';
+            document.getElementById('quiz-content').style.display = 'block';
+            updateProgress();
+        }
+        
+        // Handle return to fullscreen button click
+        returnToFullscreenButton.addEventListener('click', () => {
+            enterFullscreen();
+        });
+        
+        // Start quiz in fullscreen when button is clicked (for manual start)
+        document.getElementById('start-fullscreen-btn').addEventListener('click', function() {
+            startFullscreenQuiz();
+        });
+        
+        // Add event listeners for fullscreen change
+        document.addEventListener('fullscreenchange', handleFullscreenChange);
+        document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+        document.addEventListener('mozfullscreenchange', handleFullscreenChange);
+        document.addEventListener('MSFullscreenChange', handleFullscreenChange);
+        
+        // Handle page visibility change (tab switching)
+        document.addEventListener('visibilitychange', function() {
+            if (document.visibilityState === 'hidden' && isFullScreen) {
+                submitQuiz();
+            }
+        });
+        
+        // Block fullscreen exit keys
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'F11' || e.key === 'Escape') {
+                e.preventDefault();
+                return false;
+            }
+        });
+    </script>
+</body>
+</html>

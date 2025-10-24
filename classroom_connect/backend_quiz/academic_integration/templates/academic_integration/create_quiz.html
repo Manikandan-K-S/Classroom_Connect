@@ -1,0 +1,1434 @@
+{% extends "academic_integration/base.html" %}
+{% load static %}
+
+{% block title %}Create New Quiz{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'academic_integration/js/quiz_datetime_helpers.js' %}"></script>
+{% endblock %}
+
+{% block extra_styles %}
+<style>
+    #loadingOverlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(255, 255, 255, 0.8);
+        display: none;
+        justify-content: center;
+        align-items: center;
+        z-index: 9999;
+    }
+    
+    .modal-loading-container {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(255, 255, 255, 0.8);
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        z-index: 1050;
+        border-radius: 0.3rem;
+    }
+    
+    .loading-spinner-lg {
+        width: 4rem;
+        height: 4rem;
+    }
+    
+    .loading-text {
+        margin-top: 1rem;
+        font-size: 1.2rem;
+        color: #4a4a4a;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h1 class="h2 mb-3">Create New Quiz</h1>
+        <p class="lead">Design a new quiz for your students.</p>
+    </div>
+</div>
+
+<form id="quizForm" class="needs-validation" novalidate>
+    {% csrf_token %}
+    
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+            <h5 class="card-title mb-3">Quiz Details</h5>
+            
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <label for="title" class="form-label">Quiz Title *</label>
+                    <input type="text" class="form-control" id="title" name="title" required>
+                    <div class="invalid-feedback">
+                        Please enter a quiz title.
+                    </div>
+                </div>
+                
+                <div class="col-md-6">
+                    <label for="quiz_type" class="form-label">Quiz Type *</label>
+                    <select class="form-select" id="quiz_type" name="quiz_type" required>
+                        <option value="tutorial">Tutorial Quiz</option>
+                        <option value="mock">Mock Test</option>
+                        <option value="exam">Examination</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <label for="course_id" class="form-label">Course *</label>
+                    <select class="form-select" id="course_id" name="course_id" required>
+                        <option value="">Select a course</option>
+                        {% for course in courses %}
+                        <option value="{{ course.courseId }}">{{ course.courseName }} ({{ course.courseCode }})</option>
+                        {% endfor %}
+                    </select>
+                    <div class="invalid-feedback">
+                        Please select a course for this quiz.
+                    </div>
+                </div>
+                
+                <div class="col-md-6">
+                    <label for="tutorial_number" class="form-label">Tutorial Number</label>
+                    <select class="form-select" id="tutorial_number" name="tutorial_number">
+                        <option value="">Not linked to tutorial</option>
+                        <option value="1">Tutorial 1</option>
+                        <option value="2">Tutorial 2</option>
+                        <option value="3">Tutorial 3</option>
+                        <option value="4">Tutorial 4</option>
+                    </select>
+                    <div class="invalid-feedback">
+                        Please select a tutorial number for this tutorial quiz.
+                    </div>
+                </div>
+            </div>
+            
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <label for="start_date" class="form-label">Start Date/Time *</label>
+                    <input type="datetime-local" class="form-control" id="start_date" name="start_date" required>
+                    <div class="form-text">When the quiz becomes available to students.</div>
+                    <div class="invalid-feedback">
+                        Please select a valid future start date/time.
+                    </div>
+                </div>
+                
+                <div class="col-md-6">
+                    <label for="complete_by_date" class="form-label">Complete By Date/Time</label>
+                    <input type="datetime-local" class="form-control" id="complete_by_date" name="complete_by_date">
+                    <div class="form-text">Optional deadline for quiz completion.</div>
+                </div>
+            </div>
+            
+            <!-- Timezone information display -->
+            <div id="timezoneInfoContainer"></div>
+            
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <label for="duration_minutes" class="form-label">Duration (minutes) *</label>
+                    <input type="number" class="form-control" id="duration_minutes" name="duration_minutes" value="30" min="1" required>
+                </div>
+                
+                <div class="col-md-6">
+                    <label for="description" class="form-label">Description</label>
+                    <textarea class="form-control" id="description" name="description" rows="2"></textarea>
+                </div>
+            </div>
+            
+            <div class="row mb-3">
+                <div class="col-md-4">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="is_active" name="is_active" checked>
+                        <label class="form-check-label" for="is_active">
+                            Quiz is Active
+                        </label>
+                    </div>
+                </div>
+                
+                <div class="col-md-4">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="show_results" name="show_results" checked>
+                        <label class="form-check-label" for="show_results">
+                            Show Results After Submission
+                        </label>
+                    </div>
+                </div>
+                
+                <div class="col-md-4">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="allow_review" name="allow_review" checked>
+                        <label class="form-check-label" for="allow_review">
+                            Allow Students to Review Answers
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5 class="card-title mb-0">Questions</h5>
+                <div>
+                    <button type="button" class="btn btn-primary me-2" id="aiGenerateBtn" data-bs-toggle="modal" data-bs-target="#aiGenerateModal">
+                        <i class="bi bi-robot"></i> AI Generate Questions
+                    </button>
+                    <button type="button" class="btn btn-success" id="addQuestionBtn">
+                        <i class="bi bi-plus-circle"></i> Add Question
+                    </button>
+                </div>
+            </div>
+            
+            <div id="questionsContainer" class="mt-3">
+                <!-- Questions will be added here dynamically -->
+                <div class="alert alert-info" id="no-questions-alert">
+                    <p>No questions added yet. Use the "Add Question" button to create questions or generate questions with AI.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- AI Question Generation Modal -->
+    <div class="modal fade" id="aiGenerateModal" tabindex="-1" aria-labelledby="aiGenerateModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="aiGenerateModalLabel">Generate Quiz Questions with AI</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-primary">
+                        <i class="bi bi-info-circle-fill"></i> Upload a document or paste text content to generate quiz questions automatically using AI.
+                    </div>
+                    
+                    <form id="aiGenerateForm">
+                        <div class="mb-3">
+                            <label for="contentType" class="form-label">Content Source</label>
+                            <select class="form-select" id="contentType">
+                                <option value="file">Upload Document (PDF, DOCX, TXT)</option>
+                                <option value="text">Paste Text Content</option>
+                            </select>
+                        </div>
+                        
+                        <div id="fileUploadSection" class="mb-3">
+                            <label for="contentFile" class="form-label">Upload Document</label>
+                            <input type="file" class="form-control" id="contentFile" accept=".pdf,.docx,.txt">
+                            <div class="form-text">Max file size: 5MB. Supported formats: PDF, DOCX, TXT.</div>
+                        </div>
+                        
+                        <div id="textContentSection" class="mb-3" style="display: none;">
+                            <label for="textContent" class="form-label">Text Content</label>
+                            <textarea class="form-control" id="textContent" rows="8" placeholder="Paste educational content here..."></textarea>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-4 mb-3">
+                                <label for="numQuestions" class="form-label">Number of Questions</label>
+                                <input type="number" class="form-control" id="numQuestions" min="1" max="20" value="5">
+                            </div>
+                            
+                            <div class="col-md-4 mb-3">
+                                <label for="difficulty" class="form-label">Difficulty Level</label>
+                                <select class="form-select" id="difficulty">
+                                    <option value="easy">Easy</option>
+                                    <option value="medium" selected>Medium</option>
+                                    <option value="hard">Hard</option>
+                                </select>
+                            </div>
+                            
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label">Question Types</label>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="typeMcqSingle" checked>
+                                    <label class="form-check-label" for="typeMcqSingle">
+                                        Multiple Choice (Single)
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="typeMcqMultiple" checked>
+                                    <label class="form-check-label" for="typeMcqMultiple">
+                                        Multiple Choice (Multiple)
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="typeTrueFalse" checked>
+                                    <label class="form-check-label" for="typeTrueFalse">
+                                        True/False
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="typeText">
+                                    <label class="form-check-label" for="typeText">
+                                        Text Input
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                    
+                    <div class="progress mt-3 mb-3" id="aiProgressContainer" style="display: none;">
+                        <div class="progress-bar progress-bar-striped progress-bar-animated" id="aiProgress" role="progressbar" aria-valuenow="100" aria-valuemin="0" aria-valuemax="100" style="width: 100%"></div>
+                    </div>
+                    
+                    <div id="aiErrorMessage" class="alert alert-danger mt-3" style="display: none;">
+                    </div>
+                    
+                    <div id="aiPreviewContainer" class="mt-3" style="display: none;">
+                        <h5 class="border-bottom pb-2">Generated Questions Preview</h5>
+                        <div id="aiPreviewQuestions" class="mt-3">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="button" class="btn btn-primary" id="generateQuestionsBtn">Generate Questions</button>
+                    <button type="button" class="btn btn-success" id="addToQuizBtn" style="display: none;">Add to Quiz</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="d-grid gap-2 d-md-flex justify-content-md-end mb-4">
+        <button type="button" class="btn btn-secondary" onclick="location.href='{% url 'academic_integration:admin_quiz_dashboard' %}'">Cancel</button>
+        <button type="submit" class="btn btn-primary" id="createQuizBtn" onclick="console.log('Submit button clicked');">Create Quiz</button>
+    </div>
+</form>
+
+<!-- Loading Overlay -->
+<div class="loading-overlay" id="loadingOverlay" style="display: none;">
+    <div class="loading-spinner-container">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+        <p class="mt-3 text-white">Creating quiz... Please wait.</p>
+    </div>
+</div>
+
+<style>
+.loading-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.7);
+    z-index: 9999;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.loading-spinner-container {
+    text-align: center;
+}
+
+.spinner-border {
+    width: 3rem;
+    height: 3rem;
+}
+</style>
+
+<!-- Question Template -->
+<template id="questionTemplate">
+    <div class="card mb-3 question-card" data-question-id="${questionId}">
+        <div class="card-header bg-light d-flex justify-content-between align-items-center">
+            <span class="fw-bold">Question ${index}</span>
+            <button type="button" class="btn btn-sm btn-outline-danger delete-question-btn">
+                <i class="bi bi-trash"></i> Remove
+            </button>
+        </div>
+        <div class="card-body">
+            <div class="mb-3">
+                <label class="form-label">Question Text *</label>
+                <textarea class="form-control question-text" rows="2" required></textarea>
+            </div>
+            
+            <div class="mb-3">
+                <label class="form-label">Question Type *</label>
+                <select class="form-select question-type">
+                    <option value="mcq_single">Multiple Choice (Single Answer)</option>
+                    <option value="mcq_multiple">Multiple Choice (Multiple Answers)</option>
+                    <option value="true_false">True or False</option>
+                    <option value="text">Text Input</option>
+                </select>
+            </div>
+            
+            <div class="choices-container">
+                <!-- Choices will be added here based on question type -->
+            </div>
+            
+            <div class="mt-3">
+                <button type="button" class="btn btn-sm btn-outline-primary add-choice-btn" style="display:none;">
+                    <i class="bi bi-plus-circle"></i> Add Choice
+                </button>
+            </div>
+        </div>
+    </div>
+</template>
+
+<!-- Choice Template for MCQ -->
+<template id="choiceTemplate">
+    <div class="mb-2 choice-item">
+        <div class="input-group">
+            <div class="input-group-text">
+                <input type="${inputType}" class="form-check-input choice-correct" name="question_${questionId}_correct">
+            </div>
+            <input type="text" class="form-control choice-text" placeholder="Choice text" required>
+            <button class="btn btn-outline-danger delete-choice-btn" type="button">
+                <i class="bi bi-x"></i>
+            </button>
+        </div>
+    </div>
+</template>
+
+<!-- True/False Template -->
+<template id="trueFalseTemplate">
+    <div class="mb-2 choice-item">
+        <div class="form-check">
+            <input class="form-check-input choice-correct" type="radio" name="question_${questionId}_correct" value="true" id="question_${questionId}_true" checked>
+            <label class="form-check-label" for="question_${questionId}_true">True</label>
+        </div>
+        <div class="form-check">
+            <input class="form-check-input choice-correct" type="radio" name="question_${questionId}_correct" value="false" id="question_${questionId}_false">
+            <label class="form-check-label" for="question_${questionId}_false">False</label>
+        </div>
+    </div>
+</template>
+
+<script>
+    // Initialize variables
+    let questionCounter = 0;
+    let generatedQuestions = [];
+    
+    // When DOM is ready
+    document.addEventListener('DOMContentLoaded', function() {
+        // Initialize timezone information display
+        displayTimezoneInfo(document.getElementById('timezoneInfoContainer'));
+        
+        // Form validation
+        const form = document.getElementById('quizForm');
+        
+        // Set up initial tutorial number visibility
+        const quizType = document.getElementById('quiz_type');
+        const tutorialNumberContainer = document.getElementById('tutorial_number').closest('.col-md-6');
+        
+        // Function to handle quiz type change
+        function updateTutorialVisibility() {
+            if (quizType.value === 'tutorial') {
+                tutorialNumberContainer.style.display = 'block';
+                document.querySelector('label[for="tutorial_number"]').innerHTML = 'Tutorial Number *';
+                document.getElementById('tutorial_number').setAttribute('required', 'required');
+            } else {
+                tutorialNumberContainer.style.display = 'none';
+                document.getElementById('tutorial_number').removeAttribute('required');
+                document.querySelector('label[for="tutorial_number"]').innerHTML = 'Tutorial Number';
+            }
+        }
+        
+        // Initial call to set correct visibility
+        updateTutorialVisibility();
+        
+        // Add change event listener to quiz_type
+        quizType.addEventListener('change', updateTutorialVisibility);
+        
+        // Add Question button - direct attachment with debugging
+        const addQuestionBtn = document.getElementById('addQuestionBtn');
+        if (addQuestionBtn) {
+            // Remove any existing event listeners
+            addQuestionBtn.onclick = null;
+            
+            // Add direct event handler
+            addQuestionBtn.onclick = function(e) {
+                e.preventDefault();
+                console.log("Add Question button clicked");
+                try {
+                    addQuestion(); // Call the function to add a question
+                    console.log("Question added successfully");
+                } catch (error) {
+                    console.error("Error adding question:", error);
+                }
+                return false;
+            };
+            
+            console.log("Add Question button handler attached");
+        } else {
+            console.error("Add Question button not found in the DOM");
+        }
+        
+        // Create Quiz button - direct click handler with validation debugging
+        const createQuizBtn = document.getElementById('createQuizBtn');
+        if (createQuizBtn) {
+            createQuizBtn.onclick = function(e) {
+                e.preventDefault();
+                console.log("Create Quiz button clicked");
+                
+                // Check for required fields manually
+                const title = document.getElementById('title');
+                if (!title || !title.value.trim()) {
+                    console.log("Quiz title is required");
+                    title.classList.add('is-invalid');
+                    form.classList.add('was-validated');
+                    return false;
+                }
+                
+                // Check for course selection
+                const courseId = document.getElementById('course_id');
+                if (!courseId || !courseId.value) {
+                    console.log("Course selection is required");
+                    courseId.classList.add('is-invalid');
+                    form.classList.add('was-validated');
+                    alert("Please select a course for this quiz.");
+                    return false;
+                }
+                
+                // Check start date is in the future
+                const startDate = document.getElementById('start_date');
+                if (startDate && startDate.value) {
+                    const selectedDate = new Date(startDate.value);
+                    const currentDate = new Date();
+                    
+                    if (selectedDate <= currentDate) {
+                        console.log("Start date must be in the future");
+                        startDate.classList.add('is-invalid');
+                        alert("Start date/time must be in the future.");
+                        return false;
+                    } else {
+                        startDate.classList.remove('is-invalid');
+                    }
+                } else {
+                    console.log("Start date is required");
+                    startDate.classList.add('is-invalid');
+                    form.classList.add('was-validated');
+                    alert("Please set a start date/time for the quiz.");
+                    return false;
+                }
+                
+                // Check if tutorial number is selected for tutorial quiz type
+                const quizType = document.getElementById('quiz_type');
+                const tutorialNumber = document.getElementById('tutorial_number');
+                if (quizType.value === 'tutorial' && (!tutorialNumber.value || tutorialNumber.value === '')) {
+                    console.log("Tutorial number is required for tutorial quiz type");
+                    tutorialNumber.classList.add('is-invalid');
+                    form.classList.add('was-validated');
+                    alert("Please select a tutorial number for this tutorial quiz.");
+                    return false;
+                } else {
+                    tutorialNumber.classList.remove('is-invalid');
+                }
+                
+                // Check if we have any questions
+                const questionCards = document.querySelectorAll('.question-card');
+                if (questionCards.length === 0) {
+                    console.log("No questions added to quiz");
+                    alert("Please add at least one question to the quiz.");
+                    return false;
+                }
+                
+                // Direct submission handling
+                console.log("Proceeding with form submission");
+                try {
+                    handleFormSubmit(e);
+                } catch (error) {
+                    console.error("Error during form submission:", error);
+                    alert("An error occurred during form submission. Please check the console for details.");
+                }
+                return false;
+            };
+            console.log("Create Quiz button handler attached");
+        } else {
+            console.error("Create Quiz button not found");
+        }
+        
+        // Form submission as backup
+        form.addEventListener('submit', function(event) {
+            // Prevent default browser submission
+            event.preventDefault();
+            console.log("Form submitted via form submission");
+            
+            // Form validation
+            if (!form.checkValidity()) {
+                console.log("Form validation failed");
+                form.classList.add('was-validated');
+                return;
+            }
+            
+            // Handle the form submission
+            handleFormSubmit(event);
+        });
+        
+        // Quiz type change handler
+        document.getElementById('quiz_type').addEventListener('change', handleQuizTypeChange);
+        
+        // AI Question Generation
+        setupAIQuestionGeneration();
+        
+        // Event delegation for dynamic elements
+        document.addEventListener('click', function(e) {
+            // Delete question button
+            if (e.target.closest('.delete-question-btn')) {
+                const questionCard = e.target.closest('.question-card');
+                if (questionCard) {
+                    questionCard.remove();
+                    updateQuestionNumbers();
+                    toggleNoQuestionsAlert();
+                }
+            }
+            
+            // Delete choice button
+            if (e.target.closest('.delete-choice-btn')) {
+                const choiceItem = e.target.closest('.choice-item');
+                if (choiceItem) {
+                    const choicesContainer = choiceItem.closest('.choices-container');
+                    choiceItem.remove();
+                    
+                    // Ensure at least 2 choices remain for MCQ
+                    const remainingChoices = choicesContainer.querySelectorAll('.choice-item').length;
+                    const questionCard = choicesContainer.closest('.question-card');
+                    const questionType = questionCard.querySelector('.question-type').value;
+                    
+                    if ((questionType === 'mcq_single' || questionType === 'mcq_multiple') && remainingChoices < 2) {
+                        // Add two more choices if less than 2 remain
+                        const questionId = questionCard.dataset.questionId;
+                        const inputType = questionType === 'mcq_single' ? 'radio' : 'checkbox';
+                        addChoice(choicesContainer, questionId, inputType);
+                        addChoice(choicesContainer, questionId, inputType);
+                    }
+                }
+            }
+            
+            // Add choice button
+            if (e.target.closest('.add-choice-btn')) {
+                const questionCard = e.target.closest('.question-card');
+                const choicesContainer = questionCard.querySelector('.choices-container');
+                const questionId = questionCard.dataset.questionId;
+                const questionType = questionCard.querySelector('.question-type').value;
+                const inputType = questionType === 'mcq_single' ? 'radio' : 'checkbox';
+                
+                addChoice(choicesContainer, questionId, inputType);
+            }
+        });
+        
+        // Change event delegation for question type
+        document.addEventListener('change', function(e) {
+            if (e.target.classList.contains('question-type')) {
+                const questionCard = e.target.closest('.question-card');
+                const questionId = questionCard.dataset.questionId;
+                updateQuestionChoices(questionCard, questionId, e.target.value);
+            }
+        });
+    });
+    
+    function handleQuizTypeChange() {
+        const quizType = document.getElementById('quiz_type').value;
+        const tutorialNumberField = document.getElementById('tutorial_number');
+        
+        if (quizType === 'tutorial') {
+            tutorialNumberField.closest('.col-md-6').style.display = 'block';
+        } else {
+            tutorialNumberField.closest('.col-md-6').style.display = 'none';
+            tutorialNumberField.value = '';
+        }
+    }
+    
+    // Use existing questionCounter or initialize it
+    if (typeof questionCounter === 'undefined') {
+        console.log("Initializing question counter");
+        // Note: The actual declaration is elsewhere in the code
+    }
+    
+    function addQuestion() {
+        console.log("Adding question - function start");
+        const questionsContainer = document.getElementById('questionsContainer');
+        if (!questionsContainer) {
+            console.error("Questions container not found");
+            return;
+        }
+        
+        const template = document.getElementById('questionTemplate');
+        if (!template) {
+            console.error("Question template not found");
+            return;
+        }
+        
+        questionCounter++;
+        console.log("Question counter:", questionCounter);
+        
+        try {
+            // Clone the template
+            const questionId = `q${Date.now()}`;
+            const questionNumber = document.querySelectorAll('.question-card').length + 1;
+            console.log("Creating question number:", questionNumber);
+            
+            const questionHtml = template.innerHTML
+                .replace(/\${questionId}/g, questionId)
+                .replace(/\${index}/g, questionNumber);
+            
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = questionHtml;
+            const questionCard = tempDiv.firstElementChild;
+            
+            if (!questionCard) {
+                console.error("Failed to create question card from template");
+                return;
+            }
+            
+            // Add the question card to the container
+            questionsContainer.appendChild(questionCard);
+            console.log("Question card added to container");
+            
+            // Update choices based on default question type (mcq_single)
+            updateQuestionChoices(questionCard, questionId, 'mcq_single');
+            console.log("Choices updated for question");
+            
+            // Hide the no questions alert
+            toggleNoQuestionsAlert();
+            
+            // Add event listeners to the new question type dropdown
+            const questionTypeSelect = questionCard.querySelector('.question-type');
+            if (questionTypeSelect) {
+                questionTypeSelect.addEventListener('change', function() {
+                    updateQuestionChoices(questionCard, questionId, this.value);
+                });
+                console.log("Question type change handler added");
+            }
+            
+            // Add event handler to add choice button
+            const addChoiceBtn = questionCard.querySelector('.add-choice-btn');
+            if (addChoiceBtn) {
+                addChoiceBtn.onclick = function() {
+                    const choicesContainer = questionCard.querySelector('.choices-container');
+                    const questionType = questionCard.querySelector('.question-type').value;
+                    const inputType = questionType === 'mcq_single' ? 'radio' : 'checkbox';
+                    addChoice(choicesContainer, questionId, inputType);
+                };
+                console.log("Add choice button handler added");
+            }
+            
+            console.log("Question added successfully!");
+            return true;
+        } catch (error) {
+            console.error("Error in addQuestion function:", error);
+            return false;
+        }
+    }
+    
+    function updateQuestionChoices(questionCard, questionId, questionType) {
+        const choicesContainer = questionCard.querySelector('.choices-container');
+        const addChoiceBtn = questionCard.querySelector('.add-choice-btn');
+        
+        // Clear existing choices
+        choicesContainer.innerHTML = '';
+        
+        switch (questionType) {
+            case 'mcq_single':
+            case 'mcq_multiple':
+                // Show add choice button
+                addChoiceBtn.style.display = 'inline-block';
+                
+                // Add default choices (minimum 2)
+                const inputType = questionType === 'mcq_single' ? 'radio' : 'checkbox';
+                addChoice(choicesContainer, questionId, inputType);
+                addChoice(choicesContainer, questionId, inputType);
+                break;
+                
+            case 'true_false':
+                // Hide add choice button
+                addChoiceBtn.style.display = 'none';
+                
+                // Add true/false options
+                const tfTemplate = document.getElementById('trueFalseTemplate');
+                const tfHtml = tfTemplate.innerHTML.replace(/\${questionId}/g, questionId);
+                choicesContainer.innerHTML = tfHtml;
+                break;
+                
+            case 'text':
+                // Hide add choice button
+                addChoiceBtn.style.display = 'none';
+                
+                // Add text area for answer
+                choicesContainer.innerHTML = `
+                    <div class="mb-3">
+                        <label class="form-label">Sample Answer (optional - for your reference)</label>
+                        <textarea class="form-control" rows="2"></textarea>
+                    </div>
+                `;
+                break;
+        }
+    }
+    
+    function addChoice(choicesContainer, questionId, inputType) {
+        const template = document.getElementById('choiceTemplate');
+        const choiceHtml = template.innerHTML
+            .replace(/\${questionId}/g, questionId)
+            .replace(/\${inputType}/g, inputType);
+        
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = choiceHtml;
+        const choiceItem = tempDiv.firstElementChild;
+        
+        choicesContainer.appendChild(choiceItem);
+    }
+    
+    function updateQuestionNumbers() {
+        const questionCards = document.querySelectorAll('.question-card');
+        questionCards.forEach((card, index) => {
+            const headerText = card.querySelector('.card-header span');
+            headerText.textContent = `Question ${index + 1}`;
+        });
+    }
+    
+    function toggleNoQuestionsAlert() {
+        const alert = document.getElementById('no-questions-alert');
+        const hasQuestions = document.querySelectorAll('.question-card').length > 0;
+        alert.style.display = hasQuestions ? 'none' : 'block';
+    }
+    
+    function handleFormSubmit(event) {
+        event.preventDefault();
+        console.log("Form submission started");
+        
+        // Find all required fields that are empty
+        const form = document.getElementById('quizForm');
+        const requiredFields = form.querySelectorAll('[required]');
+        let hasInvalidFields = false;
+        
+        // Check each required field
+        requiredFields.forEach(field => {
+            if (!field.value || field.value.trim() === '') {
+                console.log(`Required field is empty: ${field.id || field.name || 'unnamed field'}`);
+                hasInvalidFields = true;
+                field.classList.add('is-invalid');
+            } else {
+                field.classList.remove('is-invalid');
+            }
+        });
+        
+        // Check if form is valid
+        if (!form.checkValidity() || hasInvalidFields) {
+            console.log("Form validation failed - some required fields are empty");
+            form.classList.add('was-validated');
+            return;
+        }
+        
+        // Check if tutorial number is selected for tutorial quiz type
+        const quizType = document.getElementById('quiz_type').value;
+        const tutorialNumber = document.getElementById('tutorial_number');
+        if (quizType === 'tutorial' && (!tutorialNumber.value || tutorialNumber.value === '')) {
+            console.log("Tutorial number is required for tutorial quiz type");
+            tutorialNumber.classList.add('is-invalid');
+            form.classList.add('was-validated');
+            alert("Please select a tutorial number for this tutorial quiz.");
+            return;
+        }
+        
+        // Check if we have questions
+        if (document.querySelectorAll('.question-card').length === 0) {
+            alert('Please add at least one question to the quiz.');
+            console.log("No questions added");
+            return;
+        }
+        
+        // Additional validation for MCQ questions - verify at least one answer is marked as correct
+        const invalidQuestions = [];
+        document.querySelectorAll('.question-card').forEach((card, index) => {
+            const questionType = card.querySelector('.question-type').value;
+            if (questionType === 'mcq_single' || questionType === 'mcq_multiple') {
+                const hasCorrectAnswer = card.querySelector('.choice-correct:checked');
+                if (!hasCorrectAnswer) {
+                    invalidQuestions.push(index + 1);
+                }
+            }
+        });
+        
+        if (invalidQuestions.length > 0) {
+            alert(`Please select at least one correct answer for question(s): ${invalidQuestions.join(', ')}`);
+            console.log("No correct answer selected for some questions");
+            return;
+        }
+        
+        // Show loading overlay
+        document.getElementById('loadingOverlay').style.display = 'flex';
+        console.log("Loading overlay displayed");
+        
+        // Disable submit button to prevent double submission
+        const submitButton = document.getElementById('createQuizBtn');
+        submitButton.disabled = true;
+        submitButton.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Creating...';
+        console.log("Submit button disabled");
+        
+        // Collect form data
+        const quizData = {
+            title: document.getElementById('title').value,
+            description: document.getElementById('description').value,
+            quiz_type: document.getElementById('quiz_type').value,
+            course_id: document.getElementById('course_id').value,
+            tutorial_number: document.getElementById('tutorial_number').value,
+            start_date: document.getElementById('start_date').value || null,
+            complete_by_date: document.getElementById('complete_by_date').value || null,
+            duration_minutes: document.getElementById('duration_minutes').value,
+            is_active: document.getElementById('is_active').checked,
+            show_results: document.getElementById('show_results').checked,
+            allow_review: document.getElementById('allow_review').checked,
+            questions: []
+        };
+        
+        // Collect questions data
+        document.querySelectorAll('.question-card').forEach((questionCard, index) => {
+            const questionType = questionCard.querySelector('.question-type').value;
+            const questionText = questionCard.querySelector('.question-text').value;
+            
+            const questionData = {
+                text: questionText,
+                type: questionType,
+                order: index,
+                choices: []
+            };
+            
+            // Collect choices data for applicable question types
+            if (questionType === 'mcq_single' || questionType === 'mcq_multiple' || questionType === 'true_false') {
+                if (questionType === 'true_false') {
+                    // Handle true/false
+                    const trueChecked = questionCard.querySelector('input[value="true"]').checked;
+                    
+                    questionData.choices = [
+                        { text: "True", is_correct: trueChecked, order: 0 },
+                        { text: "False", is_correct: !trueChecked, order: 1 }
+                    ];
+                } else {
+                    // Handle MCQ
+                    questionCard.querySelectorAll('.choice-item').forEach((choiceItem, choiceIndex) => {
+                        const choiceText = choiceItem.querySelector('.choice-text').value;
+                        const isCorrect = choiceItem.querySelector('.choice-correct').checked;
+                        
+                        questionData.choices.push({
+                            text: choiceText,
+                            is_correct: isCorrect,
+                            order: choiceIndex
+                        });
+                    });
+                }
+            }
+            
+            quizData.questions.push(questionData);
+        });
+        
+        // Log the form data for debugging
+        console.log('Raw quiz data:', quizData);
+        
+        // Apply date formatting to ensure proper timezone handling
+        const formattedQuizData = prepareQuizDataWithFormattedDates(quizData);
+        console.log('Submitting formatted quiz data:', formattedQuizData);
+        
+        // Submit the form
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+        console.log("CSRF token:", csrfToken);
+        
+        fetch('{% url "academic_integration:create_quiz" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify(formattedQuizData)
+        })
+        .then(response => {
+            console.log("Response status:", response.status);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            console.log('Response data:', data);
+            if (data.success) {
+                console.log("Quiz created successfully, redirecting...");
+                window.location.href = '{% url "academic_integration:admin_quiz_dashboard" %}';
+            } else {
+                // Hide loading overlay and reset button
+                document.getElementById('loadingOverlay').style.display = 'none';
+                submitButton.disabled = false;
+                submitButton.textContent = 'Create Quiz';
+                console.log("Error in quiz creation response");
+                
+                alert('Error creating quiz: ' + data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            
+            // Hide loading overlay and reset button on error
+            document.getElementById('loadingOverlay').style.display = 'none';
+            submitButton.disabled = false;
+            submitButton.textContent = 'Create Quiz';
+            
+            alert('An error occurred while creating the quiz. Please try again.');
+        });
+    }
+    
+    // AI Question Generation functionality
+    function setupAIQuestionGeneration() {
+        console.log("Setting up AI question generation");
+        
+        try {
+            // Content type toggle
+            const contentTypeSelect = document.getElementById('contentType');
+            if (contentTypeSelect) {
+                contentTypeSelect.addEventListener('change', function() {
+                    const fileSection = document.getElementById('fileUploadSection');
+                    const textSection = document.getElementById('textContentSection');
+                    
+                    if (this.value === 'file') {
+                        if (fileSection) fileSection.style.display = 'block';
+                        if (textSection) textSection.style.display = 'none';
+                    } else {
+                        if (fileSection) fileSection.style.display = 'none';
+                        if (textSection) textSection.style.display = 'block';
+                    }
+                });
+                console.log("Content type change handler attached");
+            } else {
+                console.error("Content type select element not found");
+            }
+            
+            // Generate questions button - direct handler attachment
+            const generateBtn = document.getElementById('generateQuestionsBtn');
+            if (generateBtn) {
+                // Remove any existing handlers to prevent duplicates
+                generateBtn.onclick = null;
+                
+                // Add direct handler
+                generateBtn.onclick = function(e) {
+                    e.preventDefault();
+                    console.log("Generate Questions button clicked");
+                    try {
+                        generateQuestions();
+                    } catch (error) {
+                        console.error("Error generating questions:", error);
+                        alert("An error occurred while generating questions. Please try again.");
+                    }
+                    return false;
+                };
+                console.log("Generate questions button handler attached");
+            } else {
+                console.error("Generate questions button not found");
+            }
+            
+            // Add to quiz button
+            const addToQuizBtn = document.getElementById('addToQuizBtn');
+            if (addToQuizBtn) {
+                addToQuizBtn.onclick = function(e) {
+                    e.preventDefault();
+                    console.log("Add to Quiz button clicked");
+                    try {
+                        addGeneratedQuestionsToQuiz();
+                    } catch (error) {
+                        console.error("Error adding generated questions to quiz:", error);
+                    }
+                    return false;
+                };
+                console.log("Add to quiz button handler attached");
+            } else {
+                console.error("Add to quiz button not found");
+            }
+            
+            console.log("AI question generation setup complete");
+        } catch (error) {
+            console.error("Error setting up AI question generation:", error);
+        }
+    }
+    
+    function generateQuestions() {
+        // Hide previous results and errors
+        document.getElementById('aiErrorMessage').style.display = 'none';
+        document.getElementById('aiPreviewContainer').style.display = 'none';
+        document.getElementById('addToQuizBtn').style.display = 'none';
+        
+        // Simply disable the generate button and change its appearance
+        const generateBtn = document.getElementById('generateQuestionsBtn');
+        generateBtn.disabled = true;
+        generateBtn.classList.add('btn-secondary');
+        generateBtn.classList.remove('btn-primary');
+        generateBtn.textContent = 'Generating Questions...';
+        
+        // Show progress bar
+        document.getElementById('aiProgressContainer').style.display = 'block';
+        
+        // Add a simple message instead of an animated overlay
+        const messageContainer = document.getElementById('aiMessageContainer') || document.createElement('div');
+        messageContainer.id = 'aiMessageContainer';
+        messageContainer.className = 'alert alert-info mt-3';
+        messageContainer.innerHTML = `
+            <div class="d-flex align-items-center">
+                <div class="me-3">
+                    <i class="bi bi-info-circle-fill" style="font-size: 1.5rem;"></i>
+                </div>
+                <div>
+                    <h5 class="mb-1">Generating Questions with Gemini AI</h5>
+                    <p class="mb-0">This may take up to 30 seconds depending on the content size. Please wait...</p>
+                </div>
+            </div>
+        `;
+        
+        // Add the message to the modal
+        const modalBody = document.querySelector('#aiGenerateModal .modal-body');
+        if (!document.getElementById('aiMessageContainer')) {
+            modalBody.appendChild(messageContainer);
+        }
+        
+        // Set position on modal content for styling
+        const modalContent = document.querySelector('#aiGenerateModal .modal-content');
+        if (modalContent) {
+            modalContent.style.position = 'relative';
+        }
+        
+        // Get selected question types
+        const selectedTypes = [];
+        if (document.getElementById('typeMcqSingle').checked) selectedTypes.push('mcq_single');
+        if (document.getElementById('typeMcqMultiple').checked) selectedTypes.push('mcq_multiple');
+        if (document.getElementById('typeTrueFalse').checked) selectedTypes.push('true_false');
+        if (document.getElementById('typeText').checked) selectedTypes.push('text');
+        
+        // Validate at least one question type is selected
+        if (selectedTypes.length === 0) {
+            showAIError('Please select at least one question type.');
+            resetGenerateButton();
+            return;
+        }
+        
+        // Get content from file or text area
+        const contentType = document.getElementById('contentType').value;
+        let fileContent = '';
+        let fileType = '';
+        
+        if (contentType === 'file') {
+            const fileInput = document.getElementById('contentFile');
+            if (!fileInput.files || fileInput.files.length === 0) {
+                showAIError('Please select a file to upload.');
+                resetGenerateButton();
+                return;
+            }
+            
+            const file = fileInput.files[0];
+            
+            // Check file size (5MB limit)
+            if (file.size > 5 * 1024 * 1024) {
+                showAIError('File size exceeds the 5MB limit.');
+                resetGenerateButton();
+                return;
+            }
+            
+            fileType = file.type;
+            
+            // Read file as base64
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                fileContent = e.target.result; // This is the base64 data
+                sendGenerateRequest(fileContent, fileType);
+            };
+            reader.onerror = function() {
+                showAIError('Error reading file.');
+                resetGenerateButton();
+            };
+            reader.readAsDataURL(file);
+            
+        } else {
+            // Get text content
+            const textContent = document.getElementById('textContent').value.trim();
+            if (!textContent) {
+                showAIError('Please enter some text content.');
+                resetGenerateButton();
+                return;
+            }
+            
+            // Convert text to base64
+            fileContent = btoa(textContent);
+            fileType = 'text/plain';
+            sendGenerateRequest(fileContent, fileType);
+        }
+    }
+    
+    function resetGenerateButton() {
+        // Reset generate button
+        const generateBtn = document.getElementById('generateQuestionsBtn');
+        generateBtn.disabled = false;
+        generateBtn.classList.remove('btn-secondary');
+        generateBtn.classList.add('btn-primary');
+        generateBtn.textContent = 'Generate Questions';
+        
+        // Hide the message container
+        const messageContainer = document.getElementById('aiMessageContainer');
+        if (messageContainer) {
+            messageContainer.style.display = 'none';
+        }
+    }
+    
+    function sendGenerateRequest(fileContent, fileType) {
+        // Get parameters
+        const numQuestions = parseInt(document.getElementById('numQuestions').value) || 5;
+        const difficulty = document.getElementById('difficulty').value;
+        
+        // Get selected question types
+        const selectedTypes = [];
+        if (document.getElementById('typeMcqSingle').checked) selectedTypes.push('mcq_single');
+        if (document.getElementById('typeMcqMultiple').checked) selectedTypes.push('mcq_multiple');
+        if (document.getElementById('typeTrueFalse').checked) selectedTypes.push('true_false');
+        if (document.getElementById('typeText').checked) selectedTypes.push('text');
+        
+        // Prepare request data
+        const requestData = {
+            fileContent: fileContent,
+            fileType: fileType,
+            numQuestions: numQuestions,
+            difficulty: difficulty,
+            questionTypes: selectedTypes
+        };
+        
+        // Get CSRF token
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+        
+        console.log('Sending request to generate questions with Gemini AI...');
+        
+        // Send request to API
+        fetch('{% url "academic_integration:generate_questions" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify(requestData)
+        })
+        .then(response => {
+            console.log('Received response with status:', response.status);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            console.log('Questions generated successfully:', data);
+            
+            // Hide progress bar
+            document.getElementById('aiProgressContainer').style.display = 'none';
+            
+            // Reset generate button appearance
+            resetGenerateButton();
+            
+            if (data.success) {
+                // Store generated questions
+                generatedQuestions = data.questions;
+                
+                // Show preview
+                showQuestionsPreview(data.questions);
+                
+                // Show "Add to Quiz" button
+                document.getElementById('addToQuizBtn').style.display = 'inline-block';
+            } else {
+                showAIError(data.error || 'Failed to generate questions. Please try again.');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            
+            // Hide progress bar and reset generate button
+            document.getElementById('aiProgressContainer').style.display = 'none';
+            resetGenerateButton();
+            
+            showAIError('An error occurred while generating questions. Please try again later.');
+        });
+    }
+    
+    function showQuestionsPreview(questions) {
+        const previewContainer = document.getElementById('aiPreviewQuestions');
+        previewContainer.innerHTML = '';
+        
+        if (!questions || questions.length === 0) {
+            previewContainer.innerHTML = '<div class="alert alert-warning">No questions were generated. Try adjusting your parameters or using different content.</div>';
+            return;
+        }
+        
+        // Create preview for each question
+        questions.forEach((question, index) => {
+            const questionDiv = document.createElement('div');
+            questionDiv.className = 'card mb-3';
+            
+            let choicesHtml = '';
+            if (question.type === 'mcq_single' || question.type === 'mcq_multiple') {
+                choicesHtml = '<ul class="list-group list-group-flush">';
+                question.choices.forEach(choice => {
+                    // Sanitize the choice text to prevent XSS
+                    const safeChoiceText = document.createElement('div');
+                    safeChoiceText.textContent = choice.text;
+                    const escapedChoiceText = safeChoiceText.innerHTML;
+                    
+                    const badgeClass = choice.is_correct ? 'bg-success' : 'bg-secondary';
+                    choicesHtml += `
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            ${escapedChoiceText}
+                            ${choice.is_correct ? '<span class="badge ' + badgeClass + '">Correct</span>' : ''}
+                        </li>`;
+                });
+                choicesHtml += '</ul>';
+            } else if (question.type === 'true_false') {
+                const correctAnswer = question.choices.find(c => c.is_correct)?.text || 'Unknown';
+                choicesHtml = `
+                    <div class="card-text">
+                        <span class="badge bg-success">Correct Answer: ${correctAnswer}</span>
+                    </div>`;
+            }
+            
+            let questionTypeText = '';
+            switch(question.type) {
+                case 'mcq_single': questionTypeText = 'Multiple Choice (Single Answer)'; break;
+                case 'mcq_multiple': questionTypeText = 'Multiple Choice (Multiple Answers)'; break;
+                case 'true_false': questionTypeText = 'True/False'; break;
+                case 'text': questionTypeText = 'Text Input'; break;
+            }
+            
+            // Create a safe version of the text with HTML entities escaped
+            const safeQuestionText = document.createElement('div');
+            safeQuestionText.textContent = question.text;
+            const escapedQuestionText = safeQuestionText.innerHTML;
+            
+            questionDiv.innerHTML = `
+                <div class="card-header d-flex justify-content-between">
+                    <span>Question ${index + 1}</span>
+                    <span class="badge bg-info">${questionTypeText}</span>
+                </div>
+                <div class="card-body">
+                    <p class="card-text">${escapedQuestionText}</p>
+                    ${choicesHtml}
+                </div>
+            `;
+            
+            previewContainer.appendChild(questionDiv);
+        });
+        
+        // Show the preview container
+        document.getElementById('aiPreviewContainer').style.display = 'block';
+    }
+    
+    function addGeneratedQuestionsToQuiz() {
+        if (!generatedQuestions || generatedQuestions.length === 0) {
+            return;
+        }
+        
+        // Add each generated question to the quiz
+        generatedQuestions.forEach(question => {
+            // Add question card
+            const questionsContainer = document.getElementById('questionsContainer');
+            const template = document.getElementById('questionTemplate');
+            questionCounter++;
+            
+            // Clone the template
+            const questionId = `q${Date.now()}_${questionCounter}`;
+            const questionNumber = document.querySelectorAll('.question-card').length + 1;
+            
+            const questionHtml = template.innerHTML
+                .replace(/\${questionId}/g, questionId)
+                .replace(/\${index}/g, questionNumber);
+            
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = questionHtml;
+            const questionCard = tempDiv.firstElementChild;
+            
+            // Add the question card to the container
+            questionsContainer.appendChild(questionCard);
+            
+            // Set question text
+            questionCard.querySelector('.question-text').value = question.text;
+            
+            // Set question type
+            const typeSelector = questionCard.querySelector('.question-type');
+            typeSelector.value = question.type;
+            
+            // Update choices based on question type
+            updateQuestionChoices(questionCard, questionId, question.type);
+            
+            // If the question has choices, add them
+            if (question.choices && question.choices.length > 0 && 
+                (question.type === 'mcq_single' || question.type === 'mcq_multiple' || question.type === 'true_false')) {
+                
+                const choicesContainer = questionCard.querySelector('.choices-container');
+                choicesContainer.innerHTML = ''; // Clear default choices
+                
+                if (question.type === 'true_false') {
+                    // Handle true/false questions
+                    const tfTemplate = document.getElementById('trueFalseTemplate');
+                    const tfHtml = tfTemplate.innerHTML.replace(/\${questionId}/g, questionId);
+                    choicesContainer.innerHTML = tfHtml;
+                    
+                    // Set correct answer
+                    const correctAnswer = question.choices.find(c => c.is_correct)?.text;
+                    const trueRadio = choicesContainer.querySelector('input[value="true"]');
+                    const falseRadio = choicesContainer.querySelector('input[value="false"]');
+                    
+                    if (correctAnswer && correctAnswer.toLowerCase() === 'true') {
+                        trueRadio.checked = true;
+                        falseRadio.checked = false;
+                    } else {
+                        trueRadio.checked = false;
+                        falseRadio.checked = true;
+                    }
+                } else {
+                    // Handle MCQ questions
+                    const inputType = question.type === 'mcq_single' ? 'radio' : 'checkbox';
+                    
+                    // Add each choice
+                    question.choices.forEach((choice, index) => {
+                        // Create choice element
+                        const template = document.getElementById('choiceTemplate');
+                        const choiceHtml = template.innerHTML
+                            .replace(/\${questionId}/g, questionId)
+                            .replace(/\${inputType}/g, inputType);
+                        
+                        const tempDiv = document.createElement('div');
+                        tempDiv.innerHTML = choiceHtml;
+                        const choiceItem = tempDiv.firstElementChild;
+                        
+                        // Set choice text and correct status
+                        choiceItem.querySelector('.choice-text').value = choice.text;
+                        choiceItem.querySelector('.choice-correct').checked = choice.is_correct;
+                        
+                        // Add to container
+                        choicesContainer.appendChild(choiceItem);
+                    });
+                }
+            }
+        });
+        
+        // Hide the no questions alert
+        toggleNoQuestionsAlert();
+        
+        // Close the modal
+        const modal = bootstrap.Modal.getInstance(document.getElementById('aiGenerateModal'));
+        modal.hide();
+        
+        // Show success message
+        alert(`Successfully added ${generatedQuestions.length} questions to the quiz.`);
+    }
+    
+    function showAIError(message) {
+        const errorElement = document.getElementById('aiErrorMessage');
+        errorElement.textContent = message;
+        errorElement.style.display = 'block';
+        document.getElementById('aiProgressContainer').style.display = 'none';
+        
+        // Reset generate button state
+        const generateBtn = document.getElementById('generateQuestionsBtn');
+        if (generateBtn.disabled) {
+            resetGenerateButton();
+        }
+    }
+</script>
+{% endblock %}

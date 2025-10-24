@@ -1,0 +1,111 @@
+{% extends "quiz/base.html" %}
+
+{% block title %}Quiz Debug: {{ quiz.title }}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="mb-3">
+        <a href="{% url 'quiz:debug_quizzes' %}" class="btn btn-secondary">← Back to All Quizzes</a>
+    </div>
+    
+    <h1 class="mb-4">Quiz Debug Details: {{ quiz.title }}</h1>
+    
+    <div class="row">
+        <div class="col-md-6">
+            <div class="card mb-4">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">System Information</h5>
+                </div>
+                <div class="card-body">
+                    <dl class="row">
+                        <dt class="col-sm-6">Django Timezone Setting:</dt>
+                        <dd class="col-sm-6">{{ django_timezone }}</dd>
+                        
+                        <dt class="col-sm-6">Current Time (aware):</dt>
+                        <dd class="col-sm-6">{{ current_time_aware }}</dd>
+                        
+                        <dt class="col-sm-6">Current Time (naive):</dt>
+                        <dd class="col-sm-6">{{ current_time_naive }}</dd>
+                        
+                        <dt class="col-sm-6">Daylight Savings Active:</dt>
+                        <dd class="col-sm-6">{{ is_dst }}</dd>
+                    </dl>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-6">
+            <div class="card mb-4 {% if not is_visible %}border-danger{% else %}border-success{% endif %}">
+                <div class="card-header {% if not is_visible %}bg-danger{% else %}bg-success{% endif %} text-white">
+                    <h5 class="mb-0">Quiz Visibility: {% if is_visible %}Visible{% else %}Hidden{% endif %}</h5>
+                </div>
+                <div class="card-body">
+                    <p><strong>Reason:</strong> {{ reason }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0">Quiz Details</h5>
+        </div>
+        <div class="card-body">
+            <dl class="row">
+                <dt class="col-sm-3">Quiz ID:</dt>
+                <dd class="col-sm-9">{{ quiz.id }}</dd>
+                
+                <dt class="col-sm-3">Title:</dt>
+                <dd class="col-sm-9">{{ quiz.title }}</dd>
+                
+                <dt class="col-sm-3">Is Active:</dt>
+                <dd class="col-sm-9">{{ quiz.is_active }}</dd>
+                
+                <dt class="col-sm-3">Is Ended:</dt>
+                <dd class="col-sm-9">{{ quiz.is_ended }}</dd>
+                
+                <dt class="col-sm-3">Start Date:</dt>
+                <dd class="col-sm-9">
+                    {{ quiz.start_date }}
+                    {% if start_date_naive %}
+                        <span class="badge badge-danger">NAIVE (timezone issue)</span>
+                    {% endif %}
+                </dd>
+                
+                <dt class="col-sm-3">Complete By Date:</dt>
+                <dd class="col-sm-9">
+                    {{ quiz.complete_by_date }}
+                    {% if complete_by_naive %}
+                        <span class="badge badge-danger">NAIVE (timezone issue)</span>
+                    {% endif %}
+                </dd>
+                
+                <dt class="col-sm-3">Questions:</dt>
+                <dd class="col-sm-9">{{ quiz.questions.count }}</dd>
+                
+                <dt class="col-sm-3">Created At:</dt>
+                <dd class="col-sm-9">{{ quiz.created_at }}</dd>
+            </dl>
+        </div>
+    </div>
+    
+    {% if start_date_naive or complete_by_naive %}
+    <div class="alert alert-warning">
+        <h5>Timezone Issues Detected</h5>
+        <p>This quiz has naive datetime objects (missing timezone information). This can cause issues with availability checking.</p>
+        <p>To fix this issue, run the following management command:</p>
+        <pre class="bg-dark text-white p-2">python manage.py fix_quiz_dates --quiz-id {{ quiz.id }}</pre>
+        <p>After running the command, refresh this page to verify the fix.</p>
+    </div>
+    {% endif %}
+    
+    <div class="card mb-4">
+        <div class="card-header bg-dark text-white">
+            <h5 class="mb-0">Raw JSON Debug</h5>
+        </div>
+        <div class="card-body">
+            <a href="{% url 'quiz:debug_quiz_availability' quiz.id %}" class="btn btn-info mb-3" target="_blank">View JSON Debug Data</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,209 @@
+{% extends "academic_integration/base.html" %}
+{% load math_filters %}
+
+{% block title %}Student Performance - {{ quiz.title }}{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h1 class="h2 mb-0">Quiz Performance</h1>
+                <h5 class="text-muted">{{ quiz.title }}</h5>
+            </div>
+            <div class="d-flex gap-2">
+                <a href="{% url 'academic_integration:admin_quiz_dashboard' %}" class="btn btn-secondary">
+                    <i class="bi bi-arrow-left"></i> Back to Quizzes
+                </a>
+                <a href="{% url 'academic_integration:quiz_answer_analysis' quiz.id %}" class="btn btn-outline-primary">
+                    <i class="bi bi-bar-chart-fill"></i> Answer Analysis
+                </a>
+                <a href="{% url 'academic_integration:edit_quiz' quiz.id %}" class="btn btn-outline-primary">
+                    <i class="bi bi-pencil"></i> Edit Quiz
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card shadow-sm h-100">
+            <div class="card-body text-center">
+                <h6 class="text-uppercase text-muted">Total Attempts</h6>
+                <h2>{{ total_attempts }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card shadow-sm h-100">
+            <div class="card-body text-center">
+                <h6 class="text-uppercase text-muted">Average Score</h6>
+                <h2>{{ avg_score|floatformat:1 }}%</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card shadow-sm h-100">
+            <div class="card-body text-center">
+                <h6 class="text-uppercase text-muted">Passing Rate</h6>
+                <h2>{{ passing_rate|floatformat:1 }}%</h2>
+                <p class="text-muted mb-0">{{ passing_count }} of {{ total_attempts }} passed</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card shadow-sm h-100 {% if needs_grading_count > 0 %}bg-warning-subtle{% endif %}">
+            <div class="card-body text-center">
+                <h6 class="text-uppercase text-muted">Needs Grading</h6>
+                <h2>{{ needs_grading_count }}</h2>
+                {% if needs_grading_count > 0 %}
+                <p class="text-warning mb-0">Manual grading required</p>
+                {% else %}
+                <p class="text-muted mb-0">All submissions graded</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card shadow-sm">
+    <div class="card-header bg-white">
+        <div class="d-flex justify-content-between align-items-center">
+            <h5 class="card-title mb-0">Student Attempts</h5>
+            <div>
+                <a href="#" class="btn btn-sm btn-outline-primary" onclick="exportToCsv()">
+                    <i class="bi bi-download"></i> Export to CSV
+                </a>
+            </div>
+        </div>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0" id="performance-table">
+            <thead class="table-light">
+                <tr>
+                    <th>Student</th>
+                    <th>Date Completed</th>
+                    <th>Score</th>
+                    <th>Status</th>
+                    <th>Duration</th>
+                    <th class="text-center">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% if attempts %}
+                    {% for attempt in attempts %}
+                        <tr>
+                            <td>
+                                <div class="fw-medium">{{ attempt.user.get_full_name|default:attempt.user.username }}</div>
+                                <div class="small text-muted">{{ attempt.user.username }}</div>
+                            </td>
+                            <td>{{ attempt.completed_at|date:"M d, Y H:i" }}</td>
+                            <td>
+                                <div class="d-flex align-items-center">
+                                    <div class="me-2">
+                                        <span class="badge {% if attempt.passed %}bg-success{% else %}bg-danger{% endif %}">
+                                            {{ attempt.percentage|floatformat:1 }}%
+                                        </span>
+                                    </div>
+                                    <div>
+                                        {{ attempt.score }}/{{ attempt.total_points }}
+                                    </div>
+                                </div>
+                            </td>
+                            <td>
+                                {% if attempt.status == 'submitted' %}
+                                    <span class="badge bg-warning">Needs Grading</span>
+                                {% elif attempt.status == 'graded' %}
+                                    <span class="badge bg-success">Graded</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">{{ attempt.status|title }}</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if attempt.duration_seconds < 60 %}
+                                    {{ attempt.duration_seconds|floatformat:0 }} secs
+                                {% elif attempt.duration_seconds < 3600 %}
+                                    {{ attempt.duration_seconds|floatformat:0|intdiv:60 }} mins
+                                {% else %}
+                                    {{ attempt.duration_seconds|floatformat:0|intdiv:3600 }} hrs
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                <a href="{% url 'academic_integration:grade_quiz_attempt' attempt.id %}" 
+                                   class="btn btn-sm {% if attempt.status == 'submitted' %}btn-warning{% else %}btn-outline-primary{% endif %}">
+                                    {% if attempt.status == 'submitted' %}
+                                        <i class="bi bi-check-circle"></i> Grade
+                                    {% else %}
+                                        <i class="bi bi-eye"></i> Review
+                                    {% endif %}
+                                </a>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                {% else %}
+                    <tr>
+                        <td colspan="6" class="text-center py-4">
+                            <div class="text-muted">
+                                <i class="bi bi-info-circle me-2"></i>No attempts have been submitted for this quiz yet.
+                            </div>
+                        </td>
+                    </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    function exportToCsv() {
+        const table = document.getElementById('performance-table');
+        if (!table) return;
+        
+        const rows = Array.from(table.querySelectorAll('tr'));
+        
+        // Extract headers
+        const headers = Array.from(rows[0].querySelectorAll('th'))
+            .map(th => th.textContent.trim())
+            .slice(0, -1); // Remove Actions column
+            
+        const csvData = [];
+        csvData.push(headers.join(','));
+        
+        // Extract data rows
+        for (let i = 1; i < rows.length; i++) {
+            const row = rows[i];
+            const cells = Array.from(row.querySelectorAll('td'))
+                .map(td => {
+                    // Get text content and remove any commas
+                    let text = td.textContent.trim().replace(/,/g, ';');
+                    
+                    // Handle special cases like badges
+                    const badge = td.querySelector('.badge');
+                    if (badge) {
+                        text = badge.textContent.trim();
+                    }
+                    
+                    // Quote the cell content
+                    return `"${text}"`;
+                })
+                .slice(0, -1); // Remove Actions column
+                
+            csvData.push(cells.join(','));
+        }
+        
+        // Create and download the CSV
+        const csvContent = csvData.join('\n');
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        
+        const link = document.createElement('a');
+        link.setAttribute('href', url);
+        link.setAttribute('download', 'quiz_performance_{{ quiz.id }}.csv');
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+</script>
+{% endblock %}

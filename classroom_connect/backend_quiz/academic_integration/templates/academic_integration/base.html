@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>{% block title %}Academic Integration{% endblock %}</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <style>
+        body {
+            background-color: #f7f9fc;
+        }
+        .app-container {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        .app-content {
+            flex: 1;
+            padding: 2rem 1rem;
+        }
+        .app-footer {
+            background: var(--bs-navbar-bg, #0d6efd);
+            color: #fff;
+            text-align: center;
+            padding: 0.75rem;
+        }
+        /* Quiz Results Page Styles */
+        .progress {
+            height: 12px;
+            background-color: #e9ecef;
+            border-radius: 10px;
+            margin: 1.5rem 0;
+            position: relative;
+        }
+        .progress-bar {
+            border-radius: 10px;
+            transition: width 1s ease;
+        }
+        .progress.progress-lg {
+            height: 30px;
+        }
+        .result-icon {
+            font-size: 2.5rem;
+        }
+        .question-text {
+            border-left: 4px solid #0d6efd;
+        }
+        .choice-item {
+            border-radius: 4px;
+            padding: 8px 12px;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+        }
+        .choice-item i {
+            margin-right: 8px;
+        }
+        .choice-correct {
+            background-color: rgba(25, 135, 84, 0.1);
+            border: 1px solid rgba(25, 135, 84, 0.2);
+        }
+        .choice-incorrect {
+            background-color: rgba(220, 53, 69, 0.1);
+            border: 1px solid rgba(220, 53, 69, 0.2);
+        }
+        .explanation-block {
+            background-color: #f8f9fa;
+            border-left: 4px solid #0dcaf0;
+            padding: 15px;
+            margin-top: 20px;
+        }
+        .quiz-info-table th {
+            width: 180px;
+        }
+    </style>
+</head>
+<body>
+<div class="app-container">
+    {% if '/academic_integration/quiz/' not in request.path %}
+    <nav class="navbar navbar-expand-lg navbar-dark {% if staff_email %}bg-primary{% elif student_roll_number %}bg-success{% else %}bg-dark{% endif %}">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="{% if staff_email %}{% url 'academic_integration:staff_dashboard' %}{% elif student_roll_number %}{% url 'academic_integration:student_dashboard' %}{% else %}{% url 'academic_integration:home' %}{% endif %}">
+                Classroom Connect
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" 
+                    aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    {% if staff_email %}
+                        <!-- Staff Navigation -->
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'academic_integration:staff_dashboard' %}">
+                                <i class="bi bi-speedometer2"></i> Dashboard
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'academic_integration:admin_quiz_dashboard' %}">
+                                <i class="bi bi-question-circle"></i> Manage Quizzes
+                            </a>
+                        </li>
+                        <li class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle" href="#" id="navbarDropdownStaff" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                <i class="bi bi-mortarboard"></i> Students
+                            </a>
+                            <ul class="dropdown-menu" aria-labelledby="navbarDropdownStaff">
+                                <li><a class="dropdown-item" href="{% url 'academic_integration:view_all_students' %}"><i class="bi bi-people"></i> View All Students</a></li>
+                                <li><a class="dropdown-item" href="{% url 'academic_integration:manage_students' %}"><i class="bi bi-book"></i> Manage Students</a></li>
+                            </ul>
+                        </li>
+                    {% elif student_roll_number %}
+                        <!-- Student Navigation -->
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'academic_integration:student_dashboard' %}">
+                                <i class="bi bi-speedometer2"></i> Dashboard
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'academic_integration:student_quiz_dashboard' %}">
+                                <i class="bi bi-question-circle"></i> My Quizzes
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'academic_integration:student_profile' %}">
+                                <i class="bi bi-person-circle"></i> My Profile
+                            </a>
+                        </li>
+                    {% else %}
+                        <!-- Not Logged In Navigation -->
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'academic_integration:home' %}">
+                                <i class="bi bi-house-door"></i> Home
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'academic_integration:staff_login' %}">
+                                <i class="bi bi-person-workspace"></i> Staff Login
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'academic_integration:student_login' %}">
+                                <i class="bi bi-mortarboard"></i> Student Login
+                            </a>
+                        </li>
+                    {% endif %}
+                </ul>
+                <div class="d-flex align-items-center text-white">
+                    {% if staff_email %}
+                        <span class="me-3"><i class="bi bi-person-workspace"></i> {{ staff_name }}</span>
+                        <a class="btn btn-outline-light btn-sm" href="{% url 'academic_integration:staff_logout' %}"><i class="bi bi-box-arrow-right"></i> Logout</a>
+                    {% elif student_roll_number %}
+                        <span class="me-3"><i class="bi bi-mortarboard"></i> {{ student_name }}</span>
+                        <a class="btn btn-outline-light btn-sm" href="{% url 'academic_integration:student_logout' %}"><i class="bi bi-box-arrow-right"></i> Logout</a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </nav>
+    {% endif %}
+
+    <main class="app-content">
+        <div class="container">
+            {% if messages %}
+                {% for message in messages %}
+                    <div class="alert alert-{{ message.tags }}" role="alert">{{ message|safe }}</div>
+                {% endfor %}
+            {% endif %}
+            {% block content %}{% endblock %}
+        </div>
+    </main>
+
+    <footer class="app-footer {% if staff_email %}bg-primary{% elif student_roll_number %}bg-success{% else %}bg-dark{% endif %}">
+        Classroom Connect &copy; 
+    </footer>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+{% block extra_js %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,85 @@
+{% extends "academic_integration/base.html" %}
+
+{% block title %}Quiz Availability Information{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-10">
+            <div class="card mb-5 shadow">
+                <div class="card-header bg-primary text-white">
+                    <h2 class="mb-0">Quiz Availability Information</h2>
+                </div>
+                <div class="card-body">
+                    <h3>{{ quiz.title }}</h3>
+                    
+                    <div class="alert {% if is_available %}alert-success{% else %}alert-danger{% endif %} mt-4">
+                        <h4>Status: {% if is_available %}Available{% else %}Not Available{% endif %}</h4>
+                        <p>{{ availability_reason }}</p>
+                    </div>
+                    
+                    <h4>Quiz Details:</h4>
+                    <table class="table table-striped">
+                        <tr>
+                            <th>Start Date:</th>
+                            <td>
+                                {{ quiz.start_date }}
+                                {% if start_date_naive %}
+                                <span class="badge badge-warning">Timezone Issue</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>Complete By Date:</th>
+                            <td>
+                                {{ quiz.complete_by_date }}
+                                {% if complete_by_naive %}
+                                <span class="badge badge-warning">Timezone Issue</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>Current Time:</th>
+                            <td>{{ current_time }}</td>
+                        </tr>
+                        <tr>
+                            <th>Active Status:</th>
+                            <td>
+                                {% if quiz.is_active %}
+                                <span class="badge badge-success">Active</span>
+                                {% else %}
+                                <span class="badge badge-danger">Inactive</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>Ended Status:</th>
+                            <td>
+                                {% if quiz.is_ended %}
+                                <span class="badge badge-danger">Ended by Teacher</span>
+                                {% else %}
+                                <span class="badge badge-success">Not Ended</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    </table>
+                    
+                    <div class="alert alert-info mt-4">
+                        <h4>System Information</h4>
+                        <p>If you believe this quiz should be available and you're seeing an error, please contact your teacher and provide the following information:</p>
+                        <ul>
+                            <li>Quiz ID: {{ quiz.id }}</li>
+                            <li>Current system time: {{ current_time }}</li>
+                            <li>Time zone: {{ time_zone }}</li>
+                            <li>Availability reason: {{ availability_reason }}</li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="card-footer">
+                    <a href="{% url 'academic_integration:student_quiz_dashboard' %}" class="btn btn-primary">Back to Dashboard</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,235 @@
+{% extends "academic_integration/base.html" %}
+
+{% block title %}Course Details - {{ course.courseName }}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h2 mb-0">{{ course.courseName }}</h1>
+            <p class="text-muted">Course Code: {{ course.courseCode }}</p>
+        </div>
+        <div>
+            <a href="{% url 'academic_integration:student_dashboard' %}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left"></i> Back to Dashboard
+            </a>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Course Quizzes Card -->
+        <div class="col-md-12 mb-4">
+            <div class="card h-100">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">Course Quizzes</h5>
+                </div>
+                <div class="card-body">
+                    {% if quizzes %}
+                        <ul class="nav nav-tabs mb-3" id="quizTabs" role="tablist">
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link active" id="active-tab" data-bs-toggle="tab" data-bs-target="#active" 
+                                    type="button" role="tab" aria-controls="active" aria-selected="true">
+                                    Active
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="completed-tab" data-bs-toggle="tab" data-bs-target="#completed" 
+                                    type="button" role="tab" aria-controls="completed" aria-selected="false">
+                                    Completed
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="all-tab" data-bs-toggle="tab" data-bs-target="#all" 
+                                    type="button" role="tab" aria-controls="all" aria-selected="false">
+                                    All
+                                </button>
+                            </li>
+                        </ul>
+
+                        <div class="tab-content" id="quizTabContent">
+                            <!-- Active Quizzes Tab -->
+                            <div class="tab-pane fade show active" id="active" role="tabpanel" aria-labelledby="active-tab">
+                                {% for quiz in active_quizzes %}
+                                    <div class="card mb-3 shadow-sm">
+                                        <div class="card-body">
+                                            <div class="d-flex justify-content-between">
+                                                <h5 class="card-title mb-1">{{ quiz.title }}</h5>
+                                                <span>
+                                                    {% if quiz.attempt %}
+                                                        {% if quiz.attempt.completed_at %}
+                                                            <span class="badge bg-success">Completed</span>
+                                                        {% else %}
+                                                            <span class="badge bg-warning text-dark">In Progress</span>
+                                                        {% endif %}
+                                                    {% else %}
+                                                        <span class="badge bg-info">Not Attempted</span>
+                                                    {% endif %}
+                                                </span>
+                                            </div>
+                                            <p class="text-muted small">{{ quiz.description|truncatechars:100 }}</p>
+                                            <div class="d-flex justify-content-between align-items-center">
+                                                <div class="small text-muted">
+                                                    <strong>Questions:</strong> {{ quiz.question_count }}
+                                                    {% if quiz.complete_by_date %} | <strong>Due:</strong> {{ quiz.complete_by_date|date:"M d, Y" }}{% endif %}
+                                                </div>
+                                                <div>
+                                                    {% if quiz.attempt and quiz.attempt.completed_at and quiz.allow_review %}
+                                                        <a href="{% url 'academic_integration:quiz_result' quiz.id %}" class="btn btn-sm btn-primary">View Results</a>
+                                                    {% else %}
+                                                        <a href="{% url 'academic_integration:quiz_detail' quiz.id %}" class="btn btn-sm btn-primary">{% if quiz.attempt %}Continue{% else %}Take Quiz{% endif %}</a>
+                                                    {% endif %}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                {% empty %}
+                                    <div class="text-center py-4">
+                                        <p class="text-muted">No active quizzes available for this course.</p>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                            
+                            <!-- Completed Quizzes Tab -->
+                            <div class="tab-pane fade" id="completed" role="tabpanel" aria-labelledby="completed-tab">
+                                {% for attempt in completed_attempts %}
+                                    <div class="card mb-3 shadow-sm">
+                                        <div class="card-body">
+                                            <div class="d-flex justify-content-between">
+                                                <h5 class="card-title mb-1">{{ attempt.quiz.title }}</h5>
+                                                <div>
+                                                    <span class="badge bg-success">{{ attempt.percentage|floatformat:1 }}%</span>
+                                                </div>
+                                            </div>
+                                            <p class="text-muted small">Completed on {{ attempt.completed_at|date:"M d, Y H:i" }}</p>
+                                            <div class="progress mb-2" style="height: 6px;">
+                                                <div class="progress-bar {% if attempt.percentage >= 70 %}bg-success{% elif attempt.percentage >= 40 %}bg-warning{% else %}bg-danger{% endif %}" 
+                                                    role="progressbar" style="width: {{ attempt.percentage }}%;" 
+                                                    aria-valuenow="{{ attempt.percentage }}" aria-valuemin="0" aria-valuemax="100"></div>
+                                            </div>
+                                            <div class="d-flex justify-content-end">
+                                                {% if attempt.quiz.allow_review %}
+                                                    <a href="{% url 'academic_integration:quiz_result' attempt.quiz.id %}" class="btn btn-sm btn-primary">View Results</a>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    </div>
+                                {% empty %}
+                                    <div class="text-center py-4">
+                                        <p class="text-muted">You haven't completed any quizzes for this course yet.</p>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                            
+                            <!-- All Quizzes Tab -->
+                            <div class="tab-pane fade" id="all" role="tabpanel" aria-labelledby="all-tab">
+                                {% for quiz in quizzes %}
+                                    <div class="card mb-3 shadow-sm">
+                                        <div class="card-body">
+                                            <div class="d-flex justify-content-between">
+                                                <h5 class="card-title mb-1">{{ quiz.title }}</h5>
+                                                <span>
+                                                    {% if quiz.attempt %}
+                                                        {% if quiz.attempt.completed_at %}
+                                                            <span class="badge bg-success">Completed</span>
+                                                        {% else %}
+                                                            <span class="badge bg-warning text-dark">In Progress</span>
+                                                        {% endif %}
+                                                    {% else %}
+                                                        <span class="badge bg-info">Not Attempted</span>
+                                                    {% endif %}
+                                                </span>
+                                            </div>
+                                            <p class="text-muted small">{{ quiz.description|truncatechars:100 }}</p>
+                                            <div class="d-flex justify-content-between align-items-center">
+                                                <div class="small text-muted">
+                                                    <strong>Questions:</strong> {{ quiz.question_count }}
+                                                    {% if quiz.complete_by_date %} | <strong>Due:</strong> {{ quiz.complete_by_date|date:"M d, Y" }}{% endif %}
+                                                </div>
+                                                <div>
+                                                    {% if quiz.attempt and quiz.attempt.completed_at %}
+                                                        {% if quiz.allow_review %}
+                                                            <a href="{% url 'academic_integration:quiz_result' quiz.id %}" class="btn btn-sm btn-primary">View Results</a>
+                                                        {% endif %}
+                                                    {% else %}
+                                                        <a href="{% url 'academic_integration:quiz_detail' quiz.id %}" class="btn btn-sm btn-primary">
+                                                            {% if quiz.attempt %}Continue{% else %}Take Quiz{% endif %}
+                                                        </a>
+                                                    {% endif %}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    {% else %}
+                        <div class="text-center py-4">
+                            <i class="fas fa-book fa-3x text-muted mb-3"></i>
+                            <p>No quizzes available for this course at this time.</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Course Marks -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0">Course Marks</h5>
+        </div>
+        <div class="card-body">
+            {% if component_details %}
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Component</th>
+                                <th>Type</th>
+                                <th>Score</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for component in component_details %}
+                                <tr>
+                                    <td>{{ component.name }}</td>
+                                    <td>{{ component.type|title }}</td>
+                                    <td>{{ component.score }}</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                    <p class="text-muted small mt-3">
+                        <i class="fas fa-info-circle"></i> Your course instructor may scale or weight marks differently in the final grade calculation.
+                    </p>
+                </div>
+            {% else %}
+                <div class="text-center py-4">
+                    <p class="text-muted">No marks data available for this course yet.</p>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<style>
+    .circular-chart {
+        display: block;
+        margin: 0 auto;
+        max-width: 150px;
+    }
+    .circle {
+        animation: progress 1s ease-out forwards;
+        transform-origin: center;
+    }
+    .circle-bg {
+        fill: none;
+    }
+    @keyframes progress {
+        0% {
+            stroke-dasharray: 0 100;
+        }
+    }
+</style>
+
+{% endblock %}

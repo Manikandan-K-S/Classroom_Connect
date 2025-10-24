@@ -1,0 +1,73 @@
+{% extends "academic_integration/base.html" %}
+
+{% block title %}Classroom Connect | Home{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-8 text-center">
+            <h1 class="display-5 fw-bold mb-4">Welcome to Classroom Connect</h1>
+            <p class="lead mb-4">An integrated platform for academic management and interactive quizzes</p>
+        </div>
+    </div>
+
+    <div class="row justify-content-center mt-3">
+        <div class="col-lg-10">
+            <div class="card shadow-sm mb-4">
+                <div class="card-body p-4">
+                    <h2 class="h4 mb-3">About the Platform</h2>
+                    <p>Classroom Connect brings together quiz-taking capabilities with complete academic record management. 
+                    Teachers can create interactive quizzes linked to tutorial assessments, while students can access all their 
+                    academic information and attempt quizzes in one place.</p>
+                    
+                    <div class="row mt-4">
+                        <div class="col-md-6">
+                            <h3 class="h5 mb-3">For Students</h3>
+                            <ul class="list-unstyled">
+                                <li><i class="bi bi-check-circle-fill text-success me-2"></i> Take course quizzes</li>
+                                <li><i class="bi bi-check-circle-fill text-success me-2"></i> View academic performance</li>
+                                <li><i class="bi bi-check-circle-fill text-success me-2"></i> Access tutorial, CA & assignment marks</li>
+                                <li><i class="bi bi-check-circle-fill text-success me-2"></i> Track progress across semesters</li>
+                            </ul>
+                        </div>
+                        <div class="col-md-6">
+                            <h3 class="h5 mb-3">For Teachers</h3>
+                            <ul class="list-unstyled">
+                                <li><i class="bi bi-check-circle-fill text-success me-2"></i> Create interactive quizzes</li>
+                                <li><i class="bi bi-check-circle-fill text-success me-2"></i> Manage course rosters</li>
+                                <li><i class="bi bi-check-circle-fill text-success me-2"></i> Track student performance</li>
+                                <li><i class="bi bi-check-circle-fill text-success me-2"></i> Auto-sync quiz scores to academic records</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row justify-content-center mt-2">
+        <div class="col-lg-10">
+            <div class="row g-4">
+                <div class="col-md-6">
+                    <div class="card shadow-sm h-100">
+                        <div class="card-body text-center p-4">
+                            <h3 class="h4 mb-3">Student Access</h3>
+                            <p>Login with your roll number to access your courses, view marks, and take quizzes.</p>
+                            <a href="{% url 'academic_integration:student_login' %}" class="btn btn-primary mt-2">Student Login</a>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card shadow-sm h-100">
+                        <div class="card-body text-center p-4">
+                            <h3 class="h4 mb-3">Staff Access</h3>
+                            <p>Login with your staff credentials to manage courses, create quizzes, and view class performance.</p>
+                            <a href="{% url 'academic_integration:staff_login' %}" class="btn btn-success mt-2">Staff Login</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

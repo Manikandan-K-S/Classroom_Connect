@@ -1,0 +1,107 @@
+{% extends "academic_integration/base.html" %}
+
+{% block title %}Timezone Debug{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h1 class="h2">Timezone Configuration Debug</h1>
+        <p class="lead">Check Django timezone settings and configuration</p>
+        
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-primary text-white">
+                <h5 class="card-title mb-0">Server Time Information</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>Current Times</h6>
+                        <p><strong>Current Server Time:</strong> {{ now }}</p>
+                        <p><strong>Server Timezone:</strong> {{ server_timezone }}</p>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Sample Time Formats</h6>
+                        <p><strong>Value:</strong> {{ sample_time.value }}</p>
+                        <p><strong>ISO Format:</strong> {{ sample_time.iso_format }}</p>
+                        <p><strong>String Representation:</strong> {{ sample_time.str_representation }}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-info text-white">
+                <h5 class="card-title mb-0">Django Timezone Settings</h5>
+            </div>
+            <div class="card-body">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Setting</th>
+                            <th>Value</th>
+                            <th>Explanation</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>TIME_ZONE</code></td>
+                            <td><strong>{{ timezone_settings.TIME_ZONE }}</strong></td>
+                            <td>
+                                The default timezone used by Django. This should typically be set to "UTC" for 
+                                server operations.
+                            </td>
+                        </tr>
+                        <tr>
+                            <td><code>USE_TZ</code></td>
+                            <td><strong>{{ timezone_settings.USE_TZ|yesno:"True,False" }}</strong></td>
+                            <td>
+                                {% if timezone_settings.USE_TZ %}
+                                    <div class="alert alert-success mb-0">
+                                        Timezone support is enabled. This is good! Django will store datetimes in the database
+                                        in UTC and convert to the current timezone when displaying.
+                                    </div>
+                                {% else %}
+                                    <div class="alert alert-danger mb-0">
+                                        Timezone support is disabled. This can cause issues with quiz availability
+                                        across different timezones. We recommend setting USE_TZ = True in settings.py.
+                                    </div>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-warning text-dark">
+                <h5 class="card-title mb-0">How Timezone Settings Affect Quiz Availability</h5>
+            </div>
+            <div class="card-body">
+                <p>When a quiz is created:</p>
+                <ol>
+                    <li>The start_date and complete_by_date should be stored as timezone-aware datetime objects</li>
+                    <li>These dates are compared to the current time when checking availability</li>
+                    <li>If dates are stored without timezone information (naive), the comparison may be inconsistent</li>
+                </ol>
+                
+                <div class="alert alert-info">
+                    <h6>Common Issues:</h6>
+                    <ul>
+                        <li>Dates entered in the UI not being stored with timezone info</li>
+                        <li>Dates being compared across different timezones</li>
+                        <li>Server timezone different from user timezone</li>
+                    </ul>
+                    
+                    <h6>Solutions:</h6>
+                    <ol>
+                        <li>Ensure USE_TZ=True in settings.py</li>
+                        <li>Use javascript to format dates with timezone info before submission</li>
+                        <li>Run the fix_quiz_dates management command to correct timezone issues in existing quizzes</li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,38 @@
+# This is a proposal for improving the true/false question handling in the submit_quiz function
+# Replace the true/false handling section (around line 1000) with this code:
+
+elif question.question_type == 'true_false':
+    # True/False question
+    try:
+        logger.debug(f"Processing true/false answer: {answer_value} (type: {type(answer_value).__name__})")
+        
+        # Convert the answer to a boolean value based on different possible formats
+        if isinstance(answer_value, bool):
+            # Direct boolean value
+            answer.boolean_answer = answer_value
+        elif isinstance(answer_value, str):
+            # String value ('true' or 'false')
+            answer.boolean_answer = answer_value.lower() == 'true'
+        elif answer_value == 1:
+            # Numeric 1 = true
+            answer.boolean_answer = True
+        elif answer_value == 0:
+            # Numeric 0 = false
+            answer.boolean_answer = False
+        else:
+            # Any other value, convert using Python's bool()
+            answer.boolean_answer = bool(answer_value)
+        
+        logger.debug(f"True/False question: Raw answer={answer_value}, Converted={answer.boolean_answer}, Correct={question.correct_answer}")
+        
+        # Check if answer matches correct answer
+        correct_answer = question.correct_answer
+        if isinstance(correct_answer, str):
+            correct_answer = correct_answer.lower() == 'true'
+            
+        if answer.boolean_answer == correct_answer:
+            answer.points_earned = question.points
+            answer.is_correct = True
+    except Exception as e:
+        logger.error(f"Error processing true/false answer: {str(e)}")
+        # Don't award points if there was an error processing the answer

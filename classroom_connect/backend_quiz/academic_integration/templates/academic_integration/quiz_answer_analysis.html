@@ -1,0 +1,322 @@
+{% extends "academic_integration/base.html" %}
+{% load math_filters %}
+
+{% block title %}Answer Analysis - {{ quiz.title }}{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h1 class="h2 mb-0">Quiz Answer Analysis</h1>
+                <h5 class="text-muted">{{ quiz.title }}</h5>
+            </div>
+            <div class="d-flex gap-2">
+                <a href="{% url 'academic_integration:quiz_student_performance' quiz.id %}" class="btn btn-outline-primary">
+                    <i class="bi bi-people"></i> Student Performance
+                </a>
+                <a href="{% url 'academic_integration:admin_quiz_dashboard' %}" class="btn btn-secondary">
+                    <i class="bi bi-arrow-left"></i> Back to Quizzes
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card shadow-sm h-100">
+            <div class="card-body text-center">
+                <h6 class="text-uppercase text-muted">Total Attempts</h6>
+                <h2>{{ total_attempts }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card shadow-sm h-100">
+            <div class="card-body text-center">
+                <h6 class="text-uppercase text-muted">Average Score</h6>
+                <h2>{{ avg_score|floatformat:1 }}%</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card shadow-sm h-100">
+            <div class="card-body text-center">
+                <h6 class="text-uppercase text-muted">Passing Rate</h6>
+                <h2>{{ passing_rate|floatformat:1 }}%</h2>
+                <p class="text-muted mb-0">{{ passing_count }} of {{ total_attempts }} passed</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card shadow-sm h-100">
+            <div class="card-body text-center">
+                <h6 class="text-uppercase text-muted">Questions</h6>
+                <h2>{{ question_analysis|length }}</h2>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if question_analysis %}
+    {% for analysis in question_analysis %}
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-white">
+                <h5 class="card-title mb-0">
+                    Question {{ forloop.counter }}: {{ analysis.question.text|truncatechars:80 }}
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row mb-4">
+                    <div class="col-md-3">
+                        <div class="card bg-light h-100">
+                            <div class="card-body text-center">
+                                <h6 class="text-uppercase text-muted">Type</h6>
+                                <p class="mb-0 fw-bold">{{ analysis.question.get_question_type_display }}</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card bg-light h-100">
+                            <div class="card-body text-center">
+                                <h6 class="text-uppercase text-muted">Answered</h6>
+                                <p class="mb-0 fw-bold">{{ analysis.total_answers }} times</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card bg-light h-100">
+                            <div class="card-body text-center">
+                                <h6 class="text-uppercase text-muted">Correct</h6>
+                                <p class="mb-0 fw-bold">{{ analysis.correct_percentage|floatformat:1 }}%</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card bg-light h-100">
+                            <div class="card-body text-center">
+                                <h6 class="text-uppercase text-muted">Avg. Points</h6>
+                                <p class="mb-0 fw-bold">{{ analysis.avg_points|floatformat:1 }} / {{ analysis.question.points }}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mb-4">
+                    <h5>Question Details</h5>
+                    <p>{{ analysis.question.text }}</p>
+                    
+                    {% if analysis.question.correct_answer %}
+                        <div class="alert alert-success">
+                            <strong>Reference Answer:</strong> {{ analysis.question.correct_answer }}
+                        </div>
+                    {% endif %}
+                </div>
+                
+                {% if analysis.question.question_type == 'mcq_single' or analysis.question.question_type == 'mcq_multiple' %}
+                    <h5>Answer Distribution</h5>
+                    <div class="table-responsive">
+                        <table class="table table-bordered">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Choice</th>
+                                    <th>Correct?</th>
+                                    <th>Times Selected</th>
+                                    <th>Percentage</th>
+                                    <th>Visualization</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for choice in analysis.choices %}
+                                    <tr>
+                                        <td>{{ choice.choice.text }}</td>
+                                        <td class="text-center">
+                                            {% if choice.choice.is_correct %}
+                                                <i class="bi bi-check-circle-fill text-success"></i>
+                                            {% else %}
+                                                <i class="bi bi-x-circle text-danger"></i>
+                                            {% endif %}
+                                        </td>
+                                        <td class="text-center">{{ choice.selection_count }}</td>
+                                        <td class="text-center">{{ choice.selection_percentage|floatformat:1 }}%</td>
+                                        <td>
+                                            <div class="progress" style="height: 25px;">
+                                                <div class="progress-bar {% if choice.choice.is_correct %}bg-success{% else %}bg-secondary{% endif %}" 
+                                                     role="progressbar" 
+                                                     style="width: {{ choice.selection_percentage }}%" 
+                                                     aria-valuenow="{{ choice.selection_percentage }}" 
+                                                     aria-valuemin="0" 
+                                                     aria-valuemax="100">{{ choice.selection_percentage|floatformat:1 }}%</div>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% elif analysis.question.question_type == 'true_false' %}
+                    <h5>Answer Distribution</h5>
+                    <div class="table-responsive">
+                        <table class="table table-bordered">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Answer</th>
+                                    <th>Correct?</th>
+                                    <th>Times Selected</th>
+                                    <th>Percentage</th>
+                                    <th>Visualization</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>True</td>
+                                    <td class="text-center">
+                                        {% if analysis.question.correct_answer == 'True' %}
+                                            <i class="bi bi-check-circle-fill text-success"></i>
+                                        {% else %}
+                                            <i class="bi bi-x-circle text-danger"></i>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-center">{{ analysis.true_count }}</td>
+                                    <td class="text-center">{{ analysis.true_percentage|floatformat:1 }}%</td>
+                                    <td>
+                                        <div class="progress" style="height: 25px;">
+                                            <div class="progress-bar {% if analysis.question.correct_answer == 'True' %}bg-success{% else %}bg-secondary{% endif %}" 
+                                                 role="progressbar" 
+                                                 style="width: {{ analysis.true_percentage }}%" 
+                                                 aria-valuenow="{{ analysis.true_percentage }}" 
+                                                 aria-valuemin="0" 
+                                                 aria-valuemax="100">{{ analysis.true_percentage|floatformat:1 }}%</div>
+                                        </div>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td>False</td>
+                                    <td class="text-center">
+                                        {% if analysis.question.correct_answer == 'False' %}
+                                            <i class="bi bi-check-circle-fill text-success"></i>
+                                        {% else %}
+                                            <i class="bi bi-x-circle text-danger"></i>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-center">{{ analysis.false_count }}</td>
+                                    <td class="text-center">{{ analysis.false_percentage|floatformat:1 }}%</td>
+                                    <td>
+                                        <div class="progress" style="height: 25px;">
+                                            <div class="progress-bar {% if analysis.question.correct_answer == 'False' %}bg-success{% else %}bg-secondary{% endif %}" 
+                                                 role="progressbar" 
+                                                 style="width: {{ analysis.false_percentage }}%" 
+                                                 aria-valuenow="{{ analysis.false_percentage }}" 
+                                                 aria-valuemin="0" 
+                                                 aria-valuemax="100">{{ analysis.false_percentage|floatformat:1 }}%</div>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                {% elif analysis.question.question_type == 'text' %}
+                    <h5>Text Answer Analysis</h5>
+                    
+                    <div class="mb-3">
+                        <p>
+                            <strong>Total text responses:</strong> {{ analysis.text_answers.count }} <br>
+                            <strong>Correct answers:</strong> {{ analysis.correct_answers }} ({{ analysis.correct_percentage|floatformat:1 }}%)
+                        </p>
+                    </div>
+                    
+                    {% if analysis.needs_grading %}
+                        <div class="alert alert-warning mb-4">
+                            <h6 class="alert-heading">Answers Needing Grading</h6>
+                            <p>The following responses need teacher evaluation:</p>
+                            
+                            <div class="list-group">
+                                {% for answer in analysis.needs_grading %}
+                                    <a href="{% url 'academic_integration:grade_quiz_attempt' answer.attempt.id %}" class="list-group-item list-group-item-action">
+                                        <div class="d-flex w-100 justify-content-between">
+                                            <h6 class="mb-1">{{ answer.attempt.user.get_full_name|default:answer.attempt.user.username }}</h6>
+                                            <small>{{ answer.created_at|date:"M d, Y H:i" }}</small>
+                                        </div>
+                                        <p class="mb-1">{{ answer.text_answer|truncatechars:100 }}</p>
+                                        <small>Click to grade this response</small>
+                                    </a>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    {% endif %}
+                    
+                    {% if analysis.correct_samples %}
+                        <div class="mb-4">
+                            <h6>Sample Correct Answers</h6>
+                            <div class="accordion" id="correct-answers-{{ analysis.question.id }}">
+                                {% for answer in analysis.correct_samples %}
+                                    <div class="accordion-item">
+                                        <h2 class="accordion-header">
+                                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" 
+                                                    data-bs-target="#correct-answer-{{ answer.id }}" aria-expanded="false">
+                                                {{ answer.attempt.user.get_full_name|default:answer.attempt.user.username }} - 
+                                                {{ answer.points_earned }} points
+                                            </button>
+                                        </h2>
+                                        <div id="correct-answer-{{ answer.id }}" class="accordion-collapse collapse" 
+                                             data-bs-parent="#correct-answers-{{ analysis.question.id }}">
+                                            <div class="accordion-body">
+                                                <div class="mb-2">
+                                                    {{ answer.text_answer|linebreaks }}
+                                                </div>
+                                                {% if answer.feedback %}
+                                                    <div class="alert alert-info">
+                                                        <strong>Teacher feedback:</strong> {{ answer.feedback }}
+                                                    </div>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    {% endif %}
+                    
+                    {% if analysis.incorrect_samples %}
+                        <div class="mb-4">
+                            <h6>Sample Incorrect Answers</h6>
+                            <div class="accordion" id="incorrect-answers-{{ analysis.question.id }}">
+                                {% for answer in analysis.incorrect_samples %}
+                                    <div class="accordion-item">
+                                        <h2 class="accordion-header">
+                                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" 
+                                                    data-bs-target="#incorrect-answer-{{ answer.id }}" aria-expanded="false">
+                                                {{ answer.attempt.user.get_full_name|default:answer.attempt.user.username }} - 
+                                                {{ answer.points_earned }} points
+                                            </button>
+                                        </h2>
+                                        <div id="incorrect-answer-{{ answer.id }}" class="accordion-collapse collapse" 
+                                             data-bs-parent="#incorrect-answers-{{ analysis.question.id }}">
+                                            <div class="accordion-body">
+                                                <div class="mb-2">
+                                                    {{ answer.text_answer|linebreaks }}
+                                                </div>
+                                                {% if answer.feedback %}
+                                                    <div class="alert alert-info">
+                                                        <strong>Teacher feedback:</strong> {{ answer.feedback }}
+                                                    </div>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    {% endif %}
+                {% endif %}
+            </div>
+        </div>
+    {% endfor %}
+{% else %}
+    <div class="alert alert-info">
+        <i class="bi bi-info-circle me-2"></i>No questions found for this quiz.
+    </div>
+{% endif %}
+
+{% endblock %}

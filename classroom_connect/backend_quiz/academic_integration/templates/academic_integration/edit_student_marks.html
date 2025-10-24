@@ -1,0 +1,236 @@
+{% extends "academic_integration/base.html" %}
+
+{% block title %}Edit Student Marks{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h2">Edit Student Marks</h1>
+            <p class="text-muted mb-0">{{ student.name }} ({{ student.rollNumber }}) - {{ course.courseName }}</p>
+        </div>
+        <div>
+            <a href="{% url 'academic_integration:staff_analytics' %}?course_id={{ course.courseId }}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left"></i> Back to Analytics
+            </a>
+        </div>
+    </div>
+
+    {% if api_error %}
+        <div class="alert alert-warning" role="alert">
+            <i class="bi bi-exclamation-triangle"></i> {{ api_error }}
+        </div>
+    {% endif %}
+    
+    {% if messages %}
+    <div class="mb-4">
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags }}" role="alert">
+                {{ message }}
+            </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="card shadow-sm">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0">Mark Entry</h5>
+        </div>
+        <div class="card-body">
+            <form method="post" action="{% url 'academic_integration:edit_student_marks' %}">
+                {% csrf_token %}
+                <input type="hidden" name="course_id" value="{{ course.courseId }}">
+                <input type="hidden" name="student_id" value="{{ student.rollNumber }}">
+                
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <h5>Tutorial Marks</h5>
+                        <p class="text-muted">Enter marks for each tutorial. Max marks: {{ tutorial_max_marks }}</p>
+                        
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-6">
+                                <label for="tutorial1" class="form-label">Tutorial 1</label>
+                                <input type="number" class="form-control" id="tutorial1" name="tutorial1" 
+                                       value="{{ student.tutorial1_score|default:'' }}" min="0" max="{{ tutorial_max_marks }}" step="0.01">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="tutorial2" class="form-label">Tutorial 2</label>
+                                <input type="number" class="form-control" id="tutorial2" name="tutorial2" 
+                                       value="{{ student.tutorial2_score|default:'' }}" min="0" max="{{ tutorial_max_marks }}" step="0.01">
+                            </div>
+                        </div>
+                        
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-6">
+                                <label for="tutorial3" class="form-label">Tutorial 3</label>
+                                <input type="number" class="form-control" id="tutorial3" name="tutorial3" 
+                                       value="{{ student.tutorial3_score|default:'' }}" min="0" max="{{ tutorial_max_marks }}" step="0.01">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="tutorial4" class="form-label">Tutorial 4</label>
+                                <input type="number" class="form-control" id="tutorial4" name="tutorial4" 
+                                       value="{{ student.tutorial4_score|default:'' }}" min="0" max="{{ tutorial_max_marks }}" step="0.01">
+                            </div>
+                        </div>
+                        
+                        <div class="alert alert-info">
+                            <i class="bi bi-info-circle"></i> Tutorial marks will be averaged and scaled to 15 marks.
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <h5>Continuous Assessment Marks</h5>
+                        <p class="text-muted">Enter original CA marks (out of 50)</p>
+                        
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-6">
+                                <label for="ca1" class="form-label">CA 1 (out of 50)</label>
+                                <input type="number" class="form-control" id="ca1" name="ca1" 
+                                       value="{{ student.ca1_original|default:'' }}" min="0" max="50" step="0.01">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="ca2" class="form-label">CA 2 (out of 50)</label>
+                                <input type="number" class="form-control" id="ca2" name="ca2" 
+                                       value="{{ student.ca2_original|default:'' }}" min="0" max="50" step="0.01">
+                            </div>
+                        </div>
+                        
+                        <div class="alert alert-info">
+                            <i class="bi bi-info-circle"></i> CA marks will be scaled to 20 marks and averaged.
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <h5>Assignment & Presentation</h5>
+                        <p class="text-muted">Total should be at most 15 marks</p>
+                        
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label for="assignment" class="form-label">Assignment</label>
+                                <input type="number" class="form-control" id="assignment" name="assignment" 
+                                       value="{{ student.assignment_score|default:'' }}" min="0" max="10" step="0.01">
+                                <div class="form-text">Recommended max: 10 marks</div>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="presentation" class="form-label">Presentation</label>
+                                <input type="number" class="form-control" id="presentation" name="presentation" 
+                                       value="{{ student.presentation_score|default:'' }}" min="0" max="5" step="0.01">
+                                <div class="form-text">Recommended max: 5 marks</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <h5>Preview Calculation</h5>
+                        <div class="alert alert-secondary">
+                            <div id="calculation-preview">
+                                <p><strong>Enter marks to see the calculation preview</strong></p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="d-flex justify-content-end">
+                    <a href="{% url 'academic_integration:staff_analytics' %}?course_id={{ course.courseId }}" class="btn btn-secondary me-2">Cancel</a>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-save"></i> Save Marks
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Calculate marks when input values change
+    document.addEventListener('DOMContentLoaded', function() {
+        const tutorialMaxMarks = {{ tutorial_max_marks }};
+        const tutorial1Input = document.getElementById('tutorial1');
+        const tutorial2Input = document.getElementById('tutorial2');
+        const tutorial3Input = document.getElementById('tutorial3');
+        const tutorial4Input = document.getElementById('tutorial4');
+        const ca1Input = document.getElementById('ca1');
+        const ca2Input = document.getElementById('ca2');
+        const assignmentInput = document.getElementById('assignment');
+        const presentationInput = document.getElementById('presentation');
+        const previewDiv = document.getElementById('calculation-preview');
+        
+        const inputs = [tutorial1Input, tutorial2Input, tutorial3Input, tutorial4Input, 
+                       ca1Input, ca2Input, assignmentInput, presentationInput];
+        
+        // Add event listeners to all inputs
+        inputs.forEach(input => {
+            input.addEventListener('input', updateCalculation);
+        });
+        
+        // Initial calculation
+        updateCalculation();
+        
+        function updateCalculation() {
+            // Get input values, using 0 for empty inputs
+            const tutorial1 = parseFloat(tutorial1Input.value) || 0;
+            const tutorial2 = parseFloat(tutorial2Input.value) || 0;
+            const tutorial3 = parseFloat(tutorial3Input.value) || 0;
+            const tutorial4 = parseFloat(tutorial4Input.value) || 0;
+            const ca1 = parseFloat(ca1Input.value) || 0;
+            const ca2 = parseFloat(ca2Input.value) || 0;
+            const assignment = parseFloat(assignmentInput.value) || 0;
+            const presentation = parseFloat(presentationInput.value) || 0;
+            
+            // Count non-zero tutorial values
+            const tutorialCount = [tutorial1, tutorial2, tutorial3, tutorial4].filter(val => val > 0).length;
+            
+            // Calculate tutorial average and marks
+            let tutorialAverage = 0;
+            let tutorialMarks = 0;
+            if (tutorialCount > 0) {
+                const tutorialSum = tutorial1 + tutorial2 + tutorial3 + tutorial4;
+                tutorialAverage = tutorialSum / tutorialCount;
+                tutorialMarks = (tutorialAverage / tutorialMaxMarks) * 15;
+            }
+            
+            // Calculate CA marks
+            const ca1Scaled = (ca1 / 50) * 20;
+            const ca2Scaled = (ca2 / 50) * 20;
+            
+            let caMarks = 0;
+            if (ca1 > 0 && ca2 > 0) {
+                caMarks = (ca1Scaled + ca2Scaled) / 2;
+            } else if (ca1 > 0) {
+                caMarks = ca1Scaled;
+            } else if (ca2 > 0) {
+                caMarks = ca2Scaled;
+            }
+            
+            // Calculate assignment & presentation marks
+            const assignmentMarks = assignment + presentation;
+            
+            // Calculate total internal and final internal marks
+            const internalTotal = tutorialMarks + caMarks + assignmentMarks;
+            const finalInternal = (internalTotal / 50) * 40;
+            
+            // Update preview
+            previewDiv.innerHTML = `
+                <h6>Tutorial Calculation:</h6>
+                <p>Average of tutorials: ${tutorialAverage.toFixed(2)} / ${tutorialMaxMarks}</p>
+                <p>Tutorial marks (scaled to 15): ${tutorialMarks.toFixed(2)} / 15</p>
+                
+                <h6>CA Calculation:</h6>
+                <p>CA1 (scaled to 20): ${ca1Scaled.toFixed(2)} / 20</p>
+                <p>CA2 (scaled to 20): ${ca2Scaled.toFixed(2)} / 20</p>
+                <p>CA Average: ${caMarks.toFixed(2)} / 20</p>
+                
+                <h6>Assignment & Presentation:</h6>
+                <p>Total: ${assignmentMarks.toFixed(2)} / 15</p>
+                
+                <h6>Final Calculation:</h6>
+                <p>Internal Total: ${internalTotal.toFixed(2)} / 50</p>
+                <p class="fw-bold">Final Internal (40%): ${finalInternal.toFixed(2)} / 40</p>
+            `;
+        }
+    });
+</script>
+{% endblock %}

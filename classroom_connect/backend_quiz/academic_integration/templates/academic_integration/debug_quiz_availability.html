@@ -1,0 +1,184 @@
+{% extends "academic_integration/base.html" %}
+
+{% block title %}Quiz Availability Debug{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h1 class="h2">Quiz Availability Debugging</h1>
+        <p class="lead">Diagnose issues with quizzes showing as "not available" to students</p>
+        
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-primary text-white">
+                <h5 class="card-title mb-0">Server Time Information</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <p><strong>Current Server Time:</strong> {{ now }}</p>
+                        <p><strong>Server Timezone:</strong> {{ server_timezone }}</p>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="alert alert-info">
+                            <p class="mb-0">Quiz availability is determined by comparing these server times to the quiz's start and end dates.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        {% if quiz %}
+            <div class="card shadow-sm mb-4">
+                <div class="card-header {% if is_available %}bg-success{% else %}bg-danger{% endif %} text-white">
+                    <h5 class="card-title mb-0">
+                        Quiz #{{ quiz.id }}: {{ quiz.title }} 
+                        {% if is_available %}
+                            <span class="badge bg-light text-success">Available</span>
+                        {% else %}
+                            <span class="badge bg-light text-danger">Not Available</span>
+                        {% endif %}
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <h6>Basic Information</h6>
+                            <p><strong>Title:</strong> {{ quiz.title }}</p>
+                            <p><strong>Active Status:</strong> {{ quiz.is_active|yesno:"Active,Inactive" }}</p>
+                            <p><strong>Course:</strong> {{ quiz.course_id }}</p>
+                            <p><strong>Quiz Type:</strong> {{ quiz.quiz_type }}</p>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>Date Information</h6>
+                            <p>
+                                <strong>Start Date:</strong> {{ quiz.start_date|default:"Not set" }}
+                                <span class="badge {% if start_date_aware == 'Timezone-aware' %}bg-success{% else %}bg-warning{% endif %}">
+                                    {{ start_date_aware }}
+                                </span>
+                            </p>
+                            <p>
+                                <strong>Complete By Date:</strong> {{ quiz.complete_by_date|default:"Not set" }}
+                                <span class="badge {% if complete_by_date_aware == 'Timezone-aware' %}bg-success{% else %}bg-warning{% endif %}">
+                                    {{ complete_by_date_aware }}
+                                </span>
+                            </p>
+                            <p><strong>Duration:</strong> {{ quiz.duration_minutes }} minutes</p>
+                        </div>
+                    </div>
+                    
+                    <div class="alert {% if is_available %}alert-success{% else %}alert-danger{% endif %}">
+                        <h6 class="alert-heading">Availability Analysis</h6>
+                        <p><strong>Current Status:</strong> {% if is_available %}Available{% else %}Not Available{% endif %}</p>
+                        
+                        <h6>Requirements for Availability:</h6>
+                        <ul>
+                            <li>
+                                Start Date: 
+                                {% if availability_reasons.start_date_passed %}
+                                    <span class="badge bg-success">✓ Passed</span>
+                                {% else %}
+                                    <span class="badge bg-danger">✗ Not Reached</span>
+                                {% endif %}
+                            </li>
+                            <li>
+                                Complete By Date: 
+                                {% if availability_reasons.not_completed_yet %}
+                                    <span class="badge bg-success">✓ Not Expired</span>
+                                {% else %}
+                                    <span class="badge bg-danger">✗ Expired</span>
+                                {% endif %}
+                            </li>
+                            <li>
+                                Active Status: 
+                                {% if availability_reasons.is_active %}
+                                    <span class="badge bg-success">✓ Active</span>
+                                {% else %}
+                                    <span class="badge bg-danger">✗ Inactive</span>
+                                {% endif %}
+                            </li>
+                        </ul>
+                    </div>
+                    
+                    <div class="alert alert-info">
+                        <h6>How to fix availability issues:</h6>
+                        <ol>
+                            <li>Ensure the quiz is marked as active</li>
+                            <li>Check that start date is in the past (or not set)</li>
+                            <li>Check that complete by date is in the future (or not set)</li>
+                            <li>If dates appear correct but quiz is still unavailable, run the management command to fix timezone issues:<br>
+                            <code>python manage.py fix_quiz_dates --quiz-id={{ quiz.id }}</code></li>
+                        </ol>
+                    </div>
+                </div>
+            </div>
+        {% else %}
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="card-title mb-0">All Quizzes Availability Status</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Title</th>
+                                    <th>Start Date</th>
+                                    <th>Complete By</th>
+                                    <th>Active</th>
+                                    <th>Available</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for quiz in quiz_availability %}
+                                <tr>
+                                    <td>{{ quiz.id }}</td>
+                                    <td>{{ quiz.title }}</td>
+                                    <td>
+                                        {{ quiz.start_date|default:"Not set" }}
+                                        <span class="badge {% if quiz.start_date_aware == 'Timezone-aware' %}bg-success{% else %}bg-warning{% endif %} small">
+                                            {{ quiz.start_date_aware }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        {{ quiz.complete_by_date|default:"Not set" }}
+                                        <span class="badge {% if quiz.complete_by_date_aware == 'Timezone-aware' %}bg-success{% else %}bg-warning{% endif %} small">
+                                            {{ quiz.complete_by_date_aware }}
+                                        </span>
+                                    </td>
+                                    <td>{{ quiz.is_active|yesno:"Yes,No" }}</td>
+                                    <td>
+                                        <span class="badge {% if quiz.is_available %}bg-success{% else %}bg-danger{% endif %}">
+                                            {{ quiz.is_available|yesno:"Available,Not Available" }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <a href="{% url 'academic_integration:debug_quiz_availability' quiz.id %}" class="btn btn-sm btn-primary">
+                                            Debug
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="7" class="text-center">No quizzes found</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <div class="card-footer">
+                    <div class="alert alert-warning">
+                        <h6>Potential Issues:</h6>
+                        <p>Quizzes with <span class="badge bg-warning">Naive (no timezone)</span> dates might experience availability issues due to timezone handling.</p>
+                        <p>To fix timezone issues in all quizzes, run:<br>
+                        <code>python manage.py fix_quiz_dates</code></p>
+                    </div>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

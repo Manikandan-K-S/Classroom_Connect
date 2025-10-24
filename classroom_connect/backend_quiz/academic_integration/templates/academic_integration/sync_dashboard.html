@@ -1,0 +1,284 @@
+{% extends 'quiz/base.html' %}
+
+{% block title %}Tutorial Sync Dashboard{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1>Tutorial Sync Dashboard</h1>
+    <p class="lead">Monitor and manage synchronization of tutorial quiz attempts with Academic Analyzer.</p>
+
+    <div class="row mb-4">
+        <!-- API Status Card -->
+        <div class="col-md-4">
+            <div class="card h-100 {% if api_status.available %}border-success{% else %}border-danger{% endif %}">
+                <div class="card-header {% if api_status.available %}bg-success text-white{% else %}bg-danger text-white{% endif %}">
+                    <h5 class="mb-0">
+                        <i class="bi {% if api_status.available %}bi-check-circle{% else %}bi-x-circle{% endif %}"></i>
+                        API Status
+                    </h5>
+                </div>
+                <div class="card-body">
+                    {% if api_status.available %}
+                        <p class="card-text">Academic Analyzer API is available.</p>
+                        <p class="card-text"><strong>Status Code:</strong> {{ api_status.status_code }}</p>
+                    {% else %}
+                        <p class="card-text">Academic Analyzer API is unavailable.</p>
+                        <p class="card-text"><strong>Error:</strong> {{ api_status.error }}</p>
+                    {% endif %}
+                    <p class="card-text"><strong>URL:</strong> {{ api_status.url }}</p>
+                </div>
+                <div class="card-footer">
+                    <a href="{% url 'academic_integration:check_api_status' %}" class="btn btn-sm btn-outline-primary" id="check-api-btn">
+                        <i class="bi bi-arrow-repeat"></i> Check API Status
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sync Summary Card -->
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="bi bi-bar-chart"></i> Sync Summary</h5>
+                </div>
+                <div class="card-body">
+                    <h2 class="display-4 text-center">{{ sync_percentage|floatformat:1 }}%</h2>
+                    <div class="progress mb-3">
+                        <div class="progress-bar bg-success" role="progressbar" style="width: {{ sync_percentage }}%" 
+                             aria-valuenow="{{ sync_percentage }}" aria-valuemin="0" aria-valuemax="100"></div>
+                    </div>
+                    <div class="row text-center">
+                        <div class="col-6">
+                            <h5 class="text-success">{{ synced_count }}</h5>
+                            <p class="text-muted">Synced</p>
+                        </div>
+                        <div class="col-6">
+                            <h5 class="text-danger">{{ unsynced_count }}</h5>
+                            <p class="text-muted">Unsynced</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-footer text-center">
+                    <p class="mb-0">Total: {{ total_tutorial_attempts }} tutorial attempts</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Actions Card -->
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="bi bi-gear"></i> Actions</h5>
+                </div>
+                <div class="card-body">
+                    <p class="card-text">Synchronize tutorial quiz attempts with Academic Analyzer API.</p>
+                    <a href="{% url 'academic_integration:sync_all_tutorials' %}" class="btn btn-primary w-100 mb-3">
+                        <i class="bi bi-cloud-upload"></i> Sync All Unsynced Attempts
+                    </a>
+                    <a href="{% url 'academic_integration:admin_quiz_dashboard' %}" class="btn btn-outline-secondary w-100">
+                        <i class="bi bi-question-circle"></i> View All Quizzes
+                    </a>
+                </div>
+                <div class="card-footer text-muted">
+                    Last check: <span id="last-check-time">{{ now|date:"Y-m-d H:i:s" }}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Course Statistics Table -->
+    <div class="card mb-4">
+        <div class="card-header bg-light">
+            <h5 class="mb-0"><i class="bi bi-book"></i> Course Statistics</h5>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-striped table-hover">
+                    <thead>
+                        <tr>
+                            <th>Course ID</th>
+                            <th>Total Attempts</th>
+                            <th>Synced</th>
+                            <th>Unsynced</th>
+                            <th>Sync %</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for course in course_stats %}
+                        <tr>
+                            <td><strong>{{ course.quiz__course_id }}</strong></td>
+                            <td>{{ course.total }}</td>
+                            <td class="text-success">{{ course.synced }}</td>
+                            <td class="text-danger">{{ course.unsynced }}</td>
+                            <td>
+                                {% if course.total > 0 %}
+                                    {% widthratio course.synced course.total 100 %}%
+                                {% else %}
+                                    N/A
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="5" class="text-center">No course data available</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Unsynced Attempts -->
+    <div class="card mb-4">
+        <div class="card-header bg-light">
+            <h5 class="mb-0"><i class="bi bi-exclamation-circle"></i> Unsynced Attempts</h5>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-striped table-hover">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Student</th>
+                            <th>Tutorial</th>
+                            <th>Course</th>
+                            <th>Score</th>
+                            <th>Completed</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for attempt in unsynced_attempts %}
+                        <tr>
+                            <td>{{ attempt.id }}</td>
+                            <td>{{ attempt.user.username }}</td>
+                            <td>
+                                {% if attempt.quiz.tutorial_number %}
+                                    Tutorial {{ attempt.quiz.tutorial_number }}
+                                {% else %}
+                                    N/A
+                                {% endif %}
+                            </td>
+                            <td>{{ attempt.quiz.course_id }}</td>
+                            <td>{{ attempt.percentage|floatformat:1 }}%</td>
+                            <td>{{ attempt.completed_at|date:"Y-m-d H:i" }}</td>
+                            <td>
+                                <a href="{% url 'academic_integration:sync_tutorial_attempt' attempt.id %}" class="btn btn-sm btn-primary">
+                                    <i class="bi bi-cloud-upload"></i> Sync
+                                </a>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="7" class="text-center">No unsynced attempts found</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recently Synced Attempts -->
+    <div class="card mb-4">
+        <div class="card-header bg-light">
+            <h5 class="mb-0"><i class="bi bi-check-circle"></i> Recently Synced</h5>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-striped table-hover">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Student</th>
+                            <th>Tutorial</th>
+                            <th>Course</th>
+                            <th>Score</th>
+                            <th>Synced At</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for attempt in recently_synced %}
+                        <tr>
+                            <td>{{ attempt.id }}</td>
+                            <td>{{ attempt.user.username }}</td>
+                            <td>
+                                {% if attempt.quiz.tutorial_number %}
+                                    Tutorial {{ attempt.quiz.tutorial_number }}
+                                {% else %}
+                                    N/A
+                                {% endif %}
+                            </td>
+                            <td>{{ attempt.quiz.course_id }}</td>
+                            <td>{{ attempt.percentage|floatformat:1 }}%</td>
+                            <td>{{ attempt.last_sync_at|date:"Y-m-d H:i:s" }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="6" class="text-center">No synced attempts found</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // API status check button
+        document.getElementById('check-api-btn').addEventListener('click', function(event) {
+            event.preventDefault();
+            
+            fetch(this.href)
+                .then(response => response.json())
+                .then(data => {
+                    // Update the page with the API status without reloading
+                    const statusCard = this.closest('.card');
+                    const cardHeader = statusCard.querySelector('.card-header');
+                    const cardBody = statusCard.querySelector('.card-body');
+                    
+                    if (data.success) {
+                        statusCard.classList.remove('border-danger');
+                        statusCard.classList.add('border-success');
+                        cardHeader.classList.remove('bg-danger');
+                        cardHeader.classList.add('bg-success');
+                        cardHeader.querySelector('i').classList.remove('bi-x-circle');
+                        cardHeader.querySelector('i').classList.add('bi-check-circle');
+                        
+                        cardBody.innerHTML = `
+                            <p class="card-text">Academic Analyzer API is available.</p>
+                            <p class="card-text"><strong>Status Code:</strong> ${data.status}</p>
+                            <p class="card-text"><strong>URL:</strong> ${data.api_url}</p>
+                        `;
+                    } else {
+                        statusCard.classList.remove('border-success');
+                        statusCard.classList.add('border-danger');
+                        cardHeader.classList.remove('bg-success');
+                        cardHeader.classList.add('bg-danger');
+                        cardHeader.querySelector('i').classList.remove('bi-check-circle');
+                        cardHeader.querySelector('i').classList.add('bi-x-circle');
+                        
+                        cardBody.innerHTML = `
+                            <p class="card-text">Academic Analyzer API is unavailable.</p>
+                            <p class="card-text"><strong>Error:</strong> ${data.message}</p>
+                            <p class="card-text"><strong>URL:</strong> ${data.api_url}</p>
+                        `;
+                    }
+                    
+                    // Update last check time
+                    const now = new Date();
+                    document.getElementById('last-check-time').textContent = now.toLocaleString();
+                })
+                .catch(error => {
+                    console.error('Error checking API status:', error);
+                    alert('Error checking API status. Check console for details.');
+                });
+        });
+    });
+</script>
+{% endblock %}

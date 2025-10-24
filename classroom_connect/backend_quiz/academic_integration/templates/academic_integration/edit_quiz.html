@@ -1,0 +1,630 @@
+{% extends "academic_integration/base.html" %}
+
+{% block title %}Edit Quiz - {{ quiz.title }}{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h1 class="h2 mb-3">Edit Quiz</h1>
+        <p class="lead">Modify quiz details and questions.</p>
+    </div>
+</div>
+
+<form id="quizForm" class="needs-validation" novalidate>
+    {% csrf_token %}
+    <input type="hidden" id="quizId" value="{{ quiz.id }}">
+    
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+            <h5 class="card-title mb-3">Quiz Details</h5>
+            
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <label for="title" class="form-label">Quiz Title *</label>
+                    <input type="text" class="form-control" id="title" name="title" value="{{ quiz.title }}" required>
+                    <div class="invalid-feedback">
+                        Please enter a quiz title.
+                    </div>
+                </div>
+                
+                <div class="col-md-6">
+                    <label for="quiz_type" class="form-label">Quiz Type *</label>
+                    <select class="form-select" id="quiz_type" name="quiz_type" required>
+                        <option value="tutorial" {% if quiz.quiz_type == 'tutorial' %}selected{% endif %}>Tutorial Quiz</option>
+                        <option value="mock" {% if quiz.quiz_type == 'mock' %}selected{% endif %}>Mock Test</option>
+                        <option value="exam" {% if quiz.quiz_type == 'exam' %}selected{% endif %}>Examination</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <label for="course_id" class="form-label">Course</label>
+                    <select class="form-select" id="course_id" name="course_id">
+                        <option value="">Not linked to a course</option>
+                        {% for course in courses %}
+                        <option value="{{ course.courseId }}" {% if quiz.course_id == course.courseId %}selected{% endif %}>
+                            {{ course.courseName }} ({{ course.courseCode }})
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="col-md-6">
+                    <label for="tutorial_number" class="form-label">Tutorial Number</label>
+                    <select class="form-select" id="tutorial_number" name="tutorial_number" 
+                        {% if quiz.quiz_type != 'tutorial' %}style="display: none;"{% endif %}>
+                        <option value="">Not linked to tutorial</option>
+                        <option value="1" {% if quiz.tutorial_number == 1 %}selected{% endif %}>Tutorial 1</option>
+                        <option value="2" {% if quiz.tutorial_number == 2 %}selected{% endif %}>Tutorial 2</option>
+                        <option value="3" {% if quiz.tutorial_number == 3 %}selected{% endif %}>Tutorial 3</option>
+                        <option value="4" {% if quiz.tutorial_number == 4 %}selected{% endif %}>Tutorial 4</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <label for="start_date" class="form-label">Start Date/Time</label>
+                    <input type="datetime-local" class="form-control" id="start_date" name="start_date" 
+                        value="{{ quiz.start_date|date:'Y-m-d\TH:i' }}">
+                    <div class="form-text">When the quiz becomes available to students.</div>
+                </div>
+                
+                <div class="col-md-6">
+                    <label for="complete_by_date" class="form-label">Complete By Date/Time</label>
+                    <input type="datetime-local" class="form-control" id="complete_by_date" name="complete_by_date" 
+                        value="{{ quiz.complete_by_date|date:'Y-m-d\TH:i' }}">
+                    <div class="form-text">Optional deadline for quiz completion.</div>
+                </div>
+            </div>
+            
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <label for="duration_minutes" class="form-label">Duration (minutes) *</label>
+                    <input type="number" class="form-control" id="duration_minutes" name="duration_minutes" 
+                        value="{{ quiz.duration_minutes }}" min="1" required>
+                </div>
+                
+                <div class="col-md-6">
+                    <label for="description" class="form-label">Description</label>
+                    <textarea class="form-control" id="description" name="description" rows="2">{{ quiz.description }}</textarea>
+                </div>
+            </div>
+            
+            <div class="row mb-3">
+                <div class="col-md-4">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="is_active" name="is_active" 
+                            {% if quiz.is_active %}checked{% endif %}>
+                        <label class="form-check-label" for="is_active">
+                            Quiz is Active
+                        </label>
+                    </div>
+                </div>
+                
+                <div class="col-md-4">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="show_results" name="show_results" 
+                            {% if quiz.show_results %}checked{% endif %}>
+                        <label class="form-check-label" for="show_results">
+                            Show Results After Submission
+                        </label>
+                    </div>
+                </div>
+                
+                <div class="col-md-4">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="allow_review" name="allow_review" 
+                            {% if quiz.allow_review %}checked{% endif %}>
+                        <label class="form-check-label" for="allow_review">
+                            Allow Students to Review Answers
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5 class="card-title mb-0">Questions</h5>
+                <button type="button" class="btn btn-success" id="addQuestionBtn">
+                    <i class="bi bi-plus-circle"></i> Add Question
+                </button>
+            </div>
+            
+            <div id="questionsContainer" class="mt-3">
+                <!-- Questions will be loaded here dynamically -->
+                <div class="alert alert-info" id="no-questions-alert" style="display: none;">
+                    <p>No questions added yet. Use the "Add Question" button to create questions.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="d-grid gap-2 d-md-flex justify-content-md-end mb-4">
+        <button type="button" class="btn btn-secondary" onclick="location.href='{% url 'academic_integration:admin_quiz_dashboard' %}'">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save Changes</button>
+    </div>
+</form>
+
+<!-- Question Template -->
+<template id="questionTemplate">
+    <div class="card mb-3 question-card" data-question-id="${questionId}">
+        <div class="card-header bg-light d-flex justify-content-between align-items-center">
+            <span class="fw-bold">Question ${index}</span>
+            <button type="button" class="btn btn-sm btn-outline-danger delete-question-btn">
+                <i class="bi bi-trash"></i> Remove
+            </button>
+        </div>
+        <div class="card-body">
+            <div class="mb-3">
+                <label class="form-label">Question Text *</label>
+                <textarea class="form-control question-text" rows="2" required>${questionText}</textarea>
+            </div>
+            
+            <div class="mb-3">
+                <label class="form-label">Question Type *</label>
+                <select class="form-select question-type">
+                    <option value="mcq_single" ${questionType === 'mcq_single' ? 'selected' : ''}>Multiple Choice (Single Answer)</option>
+                    <option value="mcq_multiple" ${questionType === 'mcq_multiple' ? 'selected' : ''}>Multiple Choice (Multiple Answers)</option>
+                    <option value="true_false" ${questionType === 'true_false' ? 'selected' : ''}>True or False</option>
+                    <option value="text" ${questionType === 'text' ? 'selected' : ''}>Text Input</option>
+                </select>
+            </div>
+            
+            <div class="choices-container">
+                <!-- Choices will be added here based on question type -->
+            </div>
+            
+            <div class="mt-3">
+                <button type="button" class="btn btn-sm btn-outline-primary add-choice-btn" style="display:none;">
+                    <i class="bi bi-plus-circle"></i> Add Choice
+                </button>
+            </div>
+        </div>
+    </div>
+</template>
+
+<!-- Choice Template for MCQ -->
+<template id="choiceTemplate">
+    <div class="mb-2 choice-item">
+        <div class="input-group">
+            <div class="input-group-text">
+                <input type="${inputType}" class="form-check-input choice-correct" name="question_${questionId}_correct" data-checked="PLACEHOLDER_CHECKED">
+            </div>
+            <input type="text" class="form-control choice-text" placeholder="Choice text" value="${choiceText}" required>
+            <button class="btn btn-outline-danger delete-choice-btn" type="button">
+                <i class="bi bi-x"></i>
+            </button>
+        </div>
+    </div>
+</template>
+
+<!-- True/False Template -->
+<template id="trueFalseTemplate">
+    <div class="mb-2 choice-item">
+        <div class="form-check">
+            <input class="form-check-input choice-correct" type="radio" name="question_${questionId}_correct" value="true" id="question_${questionId}_true" ${trueChecked ? 'checked' : ''}>
+            <label class="form-check-label" for="question_${questionId}_true">True</label>
+        </div>
+        <div class="form-check">
+            <input class="form-check-input choice-correct" type="radio" name="question_${questionId}_correct" value="false" id="question_${questionId}_false" ${falseChecked ? 'checked' : ''}>
+            <label class="form-check-label" for="question_${questionId}_false">False</label>
+        </div>
+    </div>
+</template>
+
+<script>
+    // Initialize variables
+    let questionCounter = 0;
+    let quizData = null;
+    
+    // When DOM is ready
+    document.addEventListener('DOMContentLoaded', function() {
+        // Load quiz data
+        loadQuizData();
+        
+        // Form validation
+        const form = document.getElementById('quizForm');
+        
+        // Add Question button
+        document.getElementById('addQuestionBtn').addEventListener('click', addQuestion);
+        
+        // Form submission
+        form.addEventListener('submit', handleFormSubmit);
+        
+        // Quiz type change handler
+        document.getElementById('quiz_type').addEventListener('change', handleQuizTypeChange);
+        
+        // Initialize Bootstrap validation
+        form.addEventListener('submit', function(event) {
+            if (!form.checkValidity()) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+            form.classList.add('was-validated');
+        }, false);
+        
+        // Event delegation for dynamic elements
+        document.addEventListener('click', function(e) {
+            // Delete question button
+            if (e.target.closest('.delete-question-btn')) {
+                const questionCard = e.target.closest('.question-card');
+                if (questionCard) {
+                    questionCard.remove();
+                    updateQuestionNumbers();
+                    toggleNoQuestionsAlert();
+                }
+            }
+            
+            // Delete choice button
+            if (e.target.closest('.delete-choice-btn')) {
+                const choiceItem = e.target.closest('.choice-item');
+                if (choiceItem) {
+                    const choicesContainer = choiceItem.closest('.choices-container');
+                    choiceItem.remove();
+                    
+                    // Ensure at least 2 choices remain for MCQ
+                    const remainingChoices = choicesContainer.querySelectorAll('.choice-item').length;
+                    const questionCard = choicesContainer.closest('.question-card');
+                    const questionType = questionCard.querySelector('.question-type').value;
+                    
+                    if ((questionType === 'mcq_single' || questionType === 'mcq_multiple') && remainingChoices < 2) {
+                        // Add two more choices if less than 2 remain
+                        const questionId = questionCard.dataset.questionId;
+                        const inputType = questionType === 'mcq_single' ? 'radio' : 'checkbox';
+                        addChoice(choicesContainer, questionId, inputType);
+                        addChoice(choicesContainer, questionId, inputType);
+                    }
+                }
+            }
+            
+            // Add choice button
+            if (e.target.closest('.add-choice-btn')) {
+                const questionCard = e.target.closest('.question-card');
+                const choicesContainer = questionCard.querySelector('.choices-container');
+                const questionId = questionCard.dataset.questionId;
+                const questionType = questionCard.querySelector('.question-type').value;
+                const inputType = questionType === 'mcq_single' ? 'radio' : 'checkbox';
+                
+                addChoice(choicesContainer, questionId, inputType);
+            }
+        });
+        
+        // Change event delegation for question type
+        document.addEventListener('change', function(e) {
+            if (e.target.classList.contains('question-type')) {
+                const questionCard = e.target.closest('.question-card');
+                const questionId = questionCard.dataset.questionId;
+                updateQuestionChoices(questionCard, questionId, e.target.value);
+            }
+        });
+    });
+    
+    function loadQuizData() {
+        // Load existing questions directly from the server
+        fetch(`/academic_integration/api/quiz/${document.getElementById('quizId').value}/`, {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            }
+        })
+        .then(response => {
+            console.log('Response status:', response.status);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            console.log('Quiz data received:', data);
+            if (data.success) {
+                quizData = data.quiz;
+                console.log('Questions to load:', quizData.questions);
+                if (quizData.questions && quizData.questions.length > 0) {
+                    loadQuestions(quizData.questions);
+                } else {
+                    console.log('No questions found in quiz');
+                }
+                toggleNoQuestionsAlert();
+            } else {
+                console.error('API returned error:', data.error);
+                alert('Error loading quiz data: ' + data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Fetch error:', error);
+            alert('An error occurred while loading quiz data: ' + error.message);
+        });
+    }
+    
+    function loadQuestions(questions) {
+        console.log('loadQuestions called with:', questions);
+        const questionsContainer = document.getElementById('questionsContainer');
+        
+        if (!questionsContainer) {
+            console.error('questionsContainer not found!');
+            return;
+        }
+        
+        // Remove all question cards but keep the alert
+        const questionCards = questionsContainer.querySelectorAll('.question-card');
+        questionCards.forEach(card => card.remove());
+        
+        // Add each question
+        questions.forEach((question, index) => {
+            console.log('Loading question:', question);
+            const questionId = `q${Date.now()}_${index}`;
+            questionCounter++;
+            
+            // Create question element from template
+            const questionHtml = document.getElementById('questionTemplate').innerHTML
+                .replace(/\${questionId}/g, questionId)
+                .replace(/\${index}/g, index + 1)
+                .replace(/\${questionText}/g, question.text || '')
+                .replace(/\${questionType}/g, question.question_type);
+            
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = questionHtml;
+            const questionCard = tempDiv.firstElementChild;
+            
+            // Add the question card to the container
+            questionsContainer.appendChild(questionCard);
+            
+            // Update choices based on question type
+            updateQuestionChoices(questionCard, questionId, question.question_type, question.choices);
+        });
+    }
+    
+    function handleQuizTypeChange() {
+        const quizType = document.getElementById('quiz_type').value;
+        const tutorialNumberField = document.getElementById('tutorial_number');
+        
+        if (quizType === 'tutorial') {
+            tutorialNumberField.closest('.col-md-6').style.display = 'block';
+        } else {
+            tutorialNumberField.closest('.col-md-6').style.display = 'none';
+            tutorialNumberField.value = '';
+        }
+    }
+    
+    function addQuestion() {
+        const questionsContainer = document.getElementById('questionsContainer');
+        const template = document.getElementById('questionTemplate');
+        questionCounter++;
+        
+        // Clone the template
+        const questionId = `q${Date.now()}`;
+        const questionNumber = document.querySelectorAll('.question-card').length + 1;
+        
+        const questionHtml = template.innerHTML
+            .replace(/\${questionId}/g, questionId)
+            .replace(/\${index}/g, questionNumber)
+            .replace(/\${questionText}/g, '')
+            .replace(/\${questionType === 'mcq_single' \? 'selected' : ''}/g, 'selected')
+            .replace(/\${questionType === 'mcq_multiple' \? 'selected' : ''}/g, '')
+            .replace(/\${questionType === 'true_false' \? 'selected' : ''}/g, '')
+            .replace(/\${questionType === 'text' \? 'selected' : ''}/g, '');
+        
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = questionHtml;
+        const questionCard = tempDiv.firstElementChild;
+        
+        // Add the question card to the container
+        questionsContainer.appendChild(questionCard);
+        
+        // Update choices based on default question type (mcq_single)
+        updateQuestionChoices(questionCard, questionId, 'mcq_single');
+        
+        // Hide the no questions alert
+        toggleNoQuestionsAlert();
+    }
+    
+    function updateQuestionChoices(questionCard, questionId, questionType, existingChoices = []) {
+        const choicesContainer = questionCard.querySelector('.choices-container');
+        const addChoiceBtn = questionCard.querySelector('.add-choice-btn');
+        
+        // Clear existing choices
+        choicesContainer.innerHTML = '';
+        
+        switch (questionType) {
+            case 'mcq_single':
+            case 'mcq_multiple':
+                // Show add choice button
+                addChoiceBtn.style.display = 'inline-block';
+                
+                // Add choices from existingChoices or default choices
+                const inputType = questionType === 'mcq_single' ? 'radio' : 'checkbox';
+                
+                if (existingChoices && existingChoices.length > 0) {
+                    // Add existing choices
+                    console.log('Adding existing choices:', existingChoices);
+                    existingChoices.forEach(choice => {
+                        console.log('Choice:', choice.text, 'isCorrect:', choice.is_correct);
+                        addChoice(choicesContainer, questionId, inputType, choice.text, choice.is_correct);
+                    });
+                } else {
+                    // Add default choices (minimum 2)
+                    addChoice(choicesContainer, questionId, inputType);
+                    addChoice(choicesContainer, questionId, inputType);
+                }
+                break;
+                
+            case 'true_false':
+                // Hide add choice button
+                addChoiceBtn.style.display = 'none';
+                
+                // Add true/false options
+                let trueChecked = true;
+                let falseChecked = false;
+                
+                if (existingChoices && existingChoices.length > 0) {
+                    // Find which one is marked as correct
+                    const trueChoice = existingChoices.find(c => c.text.toLowerCase() === 'true');
+                    if (trueChoice) {
+                        trueChecked = trueChoice.is_correct;
+                        falseChecked = !trueChecked;
+                    }
+                }
+                
+                const tfTemplate = document.getElementById('trueFalseTemplate');
+                const tfHtml = tfTemplate.innerHTML
+                    .replace(/\${questionId}/g, questionId)
+                    .replace(/\${trueChecked \? 'checked' : ''}/g, trueChecked ? 'checked' : '')
+                    .replace(/\${falseChecked \? 'checked' : ''}/g, falseChecked ? 'checked' : '');
+                
+                choicesContainer.innerHTML = tfHtml;
+                break;
+                
+            case 'text':
+                // Hide add choice button
+                addChoiceBtn.style.display = 'none';
+                
+                // Add text area for answer
+                choicesContainer.innerHTML = `
+                    <div class="mb-3">
+                        <label class="form-label">Sample Answer (optional - for your reference)</label>
+                        <textarea class="form-control" rows="2"></textarea>
+                    </div>
+                `;
+                break;
+        }
+    }
+    
+    function addChoice(choicesContainer, questionId, inputType, choiceText = '', isCorrect = false) {
+        const template = document.getElementById('choiceTemplate');
+        let choiceHtml = template.innerHTML
+            .replace(/\$\{questionId\}/g, questionId)
+            .replace(/\$\{inputType\}/g, inputType)
+            .replace(/\$\{choiceText\}/g, choiceText);
+        
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = choiceHtml;
+        const choiceItem = tempDiv.firstElementChild;
+        
+        // Set the checked attribute on the input element
+        const inputElement = choiceItem.querySelector('.choice-correct');
+        if (isCorrect) {
+            inputElement.checked = true;
+        }
+        // Remove the placeholder data attribute
+        inputElement.removeAttribute('data-checked');
+        
+        choicesContainer.appendChild(choiceItem);
+    }
+    
+    function updateQuestionNumbers() {
+        const questionCards = document.querySelectorAll('.question-card');
+        questionCards.forEach((card, index) => {
+            const headerText = card.querySelector('.card-header span');
+            headerText.textContent = `Question ${index + 1}`;
+        });
+    }
+    
+    function toggleNoQuestionsAlert() {
+        const alert = document.getElementById('no-questions-alert');
+        const hasQuestions = document.querySelectorAll('.question-card').length > 0;
+        alert.style.display = hasQuestions ? 'none' : 'block';
+    }
+    
+    function handleFormSubmit(event) {
+        event.preventDefault();
+        
+        // Check if form is valid
+        if (!document.getElementById('quizForm').checkValidity()) {
+            return;
+        }
+        
+        // Check if we have questions
+        if (document.querySelectorAll('.question-card').length === 0) {
+            alert('Please add at least one question to the quiz.');
+            return;
+        }
+        
+        // Collect form data
+        const quizData = {
+            title: document.getElementById('title').value,
+            description: document.getElementById('description').value,
+            quiz_type: document.getElementById('quiz_type').value,
+            course_id: document.getElementById('course_id').value,
+            tutorial_number: document.getElementById('tutorial_number').value,
+            start_date: document.getElementById('start_date').value || null,
+            complete_by_date: document.getElementById('complete_by_date').value || null,
+            duration_minutes: document.getElementById('duration_minutes').value,
+            is_active: document.getElementById('is_active').checked,
+            show_results: document.getElementById('show_results').checked,
+            allow_review: document.getElementById('allow_review').checked,
+            questions: []
+        };
+        
+        // Collect questions data
+        document.querySelectorAll('.question-card').forEach((questionCard, index) => {
+            const questionType = questionCard.querySelector('.question-type').value;
+            const questionText = questionCard.querySelector('.question-text').value;
+            
+            const questionData = {
+                text: questionText,
+                type: questionType,
+                order: index,
+                choices: []
+            };
+            
+            // Collect choices data for applicable question types
+            if (questionType === 'mcq_single' || questionType === 'mcq_multiple' || questionType === 'true_false') {
+                if (questionType === 'true_false') {
+                    // Handle true/false
+                    const trueChecked = questionCard.querySelector('input[value="true"]').checked;
+                    
+                    questionData.choices = [
+                        { text: "True", is_correct: trueChecked, order: 0 },
+                        { text: "False", is_correct: !trueChecked, order: 1 }
+                    ];
+                } else {
+                    // Handle MCQ
+                    questionCard.querySelectorAll('.choice-item').forEach((choiceItem, choiceIndex) => {
+                        const choiceText = choiceItem.querySelector('.choice-text').value;
+                        const isCorrect = choiceItem.querySelector('.choice-correct').checked;
+                        
+                        questionData.choices.push({
+                            text: choiceText,
+                            is_correct: isCorrect,
+                            order: choiceIndex
+                        });
+                    });
+                }
+            }
+            
+            quizData.questions.push(questionData);
+        });
+        
+        // Submit the form
+        const quizId = document.getElementById('quizId').value;
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+        
+        fetch(`{% url "academic_integration:edit_quiz" quiz.id %}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify(quizData)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                window.location.href = '{% url "academic_integration:admin_quiz_dashboard" %}';
+            } else {
+                alert('Error updating quiz: ' + data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('An error occurred while updating the quiz.');
+        });
+    }
+</script>
+{% endblock %}

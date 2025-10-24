@@ -1,0 +1,609 @@
+{% extends "academic_integration/base.html" %}
+
+{% block title %}Analytics Dashboard{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h2">Analytics Dashboard</h1>
+            <p class="text-muted mb-0">Student Performance Analytics</p>
+        </div>
+        <div>
+            <a href="{% url 'academic_integration:staff_dashboard' %}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left"></i> Back to Dashboard
+            </a>
+        </div>
+    </div>
+
+    {% if api_error %}
+        <div class="alert alert-warning" role="alert">
+            <i class="bi bi-exclamation-triangle"></i> {{ api_error }}
+        </div>
+    {% endif %}
+
+    <!-- Course Selection -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-white">
+            <h5 class="mb-0">Select Course</h5>
+        </div>
+        <div class="card-body">
+            <form method="get" action="{% url 'academic_integration:staff_analytics' %}" class="row g-3 align-items-end">
+                <div class="col-md-6">
+                    <label for="course_id" class="form-label">Course</label>
+                    <select class="form-select" id="course_id" name="course_id" required>
+                        <option value="" {% if not selected_course %}selected{% endif %}>Choose a course...</option>
+                        {% for course in courses %}
+                            <option value="{{ course.courseId }}" {% if selected_course.courseId == course.courseId %}selected{% endif %}>
+                                {{ course.courseName }} ({{ course.courseCode|default:course.courseId }})
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-search"></i> View Analytics
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Analytics Content (shown only if a course is selected) -->
+    {% if selected_course %}
+        <div class="row">
+            <!-- Course Summary Card -->
+            <div class="col-md-4 mb-4">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0">Course Summary</h5>
+                    </div>
+                    <div class="card-body">
+                        <h4>{{ selected_course.courseName }}</h4>
+                        <p class="text-muted">{{ selected_course.courseCode|default:"" }}</p>
+                        
+                        <div class="mt-4">
+                            <div class="d-flex justify-content-between mb-2">
+                                <span>Students:</span>
+                                <strong>{{ student_count }}</strong>
+                            </div>
+                            <div class="d-flex justify-content-between mb-2">
+                                <span>Average Score:</span>
+                                <strong>{{ avg_score|floatformat:1 }}%</strong>
+                            </div>
+                            <div class="d-flex justify-content-between mb-2">
+                                <span>Tutorial Completion:</span>
+                                <strong>{{ tutorial_completion_rate|floatformat:1 }}%</strong>
+                            </div>
+                            <div class="d-flex justify-content-between mb-2">
+                                <span>Assignment Completion:</span>
+                                <strong>{{ assignment_completion_rate|floatformat:1 }}%</strong>
+                            </div>
+                        </div>
+                        
+                        <!-- Grade Distribution -->
+                        <h6 class="mt-4 mb-3">Grade Distribution</h6>
+                        <div class="mb-2">
+                            <div class="d-flex justify-content-between small mb-1">
+                                <span>A (90-100%)</span>
+                                <span>{{ grade_a_count }} students</span>
+                            </div>
+                            <div class="progress" style="height: 6px;">
+                                <div class="progress-bar bg-success" style="width: {{ grade_a_percentage }}%"></div>
+                            </div>
+                        </div>
+                        <div class="mb-2">
+                            <div class="d-flex justify-content-between small mb-1">
+                                <span>B (80-89%)</span>
+                                <span>{{ grade_b_count }} students</span>
+                            </div>
+                            <div class="progress" style="height: 6px;">
+                                <div class="progress-bar bg-info" style="width: {{ grade_b_percentage }}%"></div>
+                            </div>
+                        </div>
+                        <div class="mb-2">
+                            <div class="d-flex justify-content-between small mb-1">
+                                <span>C (70-79%)</span>
+                                <span>{{ grade_c_count }} students</span>
+                            </div>
+                            <div class="progress" style="height: 6px;">
+                                <div class="progress-bar bg-primary" style="width: {{ grade_c_percentage }}%"></div>
+                            </div>
+                        </div>
+                        <div class="mb-2">
+                            <div class="d-flex justify-content-between small mb-1">
+                                <span>D (60-69%)</span>
+                                <span>{{ grade_d_count }} students</span>
+                            </div>
+                            <div class="progress" style="height: 6px;">
+                                <div class="progress-bar bg-warning" style="width: {{ grade_d_percentage }}%"></div>
+                            </div>
+                        </div>
+                        <div class="mb-2">
+                            <div class="d-flex justify-content-between small mb-1">
+                                <span>F (<60%)</span>
+                                <span>{{ grade_f_count }} students</span>
+                            </div>
+                            <div class="progress" style="height: 6px;">
+                                <div class="progress-bar bg-danger" style="width: {{ grade_f_percentage }}%"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Student Performance Table -->
+            <div class="col-md-8 mb-4">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">Student Performance</h5>
+                        <a href="{% url 'academic_integration:export_analytics' %}?course_id={{ selected_course.courseId }}" class="btn btn-sm btn-light">
+                            <i class="bi bi-download"></i> Export CSV
+                        </a>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Roll Number</th>
+                                        <th>Name</th>
+                                        <th title="Average of 4 tutorials (scaled to 15 marks)">Tutorials<br><span class="small">/15</span></th>
+                                        <th title="Average of 2 CAs (each out of 20 marks)">CAs<br><span class="small">/20</span></th>
+                                        <th title="Assignment & Presentation scores">Assignment<br><span class="small">/15</span></th>
+                                        <th title="Total internal marks before final conversion">Internal Total<br><span class="small">/50</span></th>
+                                        <th title="Internal marks converted to 40-mark scale">Final Internal<br><span class="small">/40</span></th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for student in students %}
+                                    <tr>
+                                        <td>{{ student.rollno }}</td>
+                                        <td>{{ student.name }}</td>
+                                        <td>{{ student.tutorialScore|floatformat:1|default:"--" }}</td>
+                                        <td>{{ student.caScore|floatformat:1|default:"--" }}</td>
+                                        <td>{{ student.assignmentScore|floatformat:1|default:"--" }}</td>
+                                        <td class="fw-bold">{{ student.internalTotal|floatformat:1|default:"--" }}</td>
+                                        <td class="fw-bold">{{ student.finalInternal|floatformat:1|default:"--" }}</td>
+                                        <td>
+                                            <a href="{% url 'academic_integration:edit_student_marks' %}?course_id={{ course.courseId }}&student_id={{ student.rollno }}" class="btn btn-sm btn-outline-primary">
+                                                <i class="bi bi-pencil"></i>
+                                            </a>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#studentDetailModal{{ student.rollno|slugify }}">
+                                                <i class="bi bi-eye"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Student Performance Breakdown (Detailed view per component) -->
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-white">
+                <ul class="nav nav-tabs card-header-tabs" id="performanceBreakdown" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="tutorials-tab" data-bs-toggle="tab" data-bs-target="#tutorials" 
+                                type="button" role="tab" aria-controls="tutorials" aria-selected="true">
+                            Tutorials
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="cas-tab" data-bs-toggle="tab" data-bs-target="#cas" 
+                                type="button" role="tab" aria-controls="cas" aria-selected="false">
+                            Continuous Assessment
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="assignments-tab" data-bs-toggle="tab" data-bs-target="#assignments" 
+                                type="button" role="tab" aria-controls="assignments" aria-selected="false">
+                            Assignments & Presentation
+                        </button>
+                    </li>
+                </ul>
+            </div>
+            <div class="card-body">
+                <div class="tab-content" id="performanceBreakdownContent">
+                    <!-- Tutorials Tab -->
+                    <div class="tab-pane fade show active" id="tutorials" role="tabpanel" aria-labelledby="tutorials-tab">
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Roll Number</th>
+                                        <th>Name</th>
+                                        <th>Tutorial 1</th>
+                                        <th>Tutorial 2</th>
+                                        <th>Tutorial 3</th>
+                                        <th>Tutorial 4</th>
+                                        <th>Average</th>
+                                        <th>Final (out of 15)</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for student in students %}
+                                    <tr>
+                                        <td>{{ student.rollno }}</td>
+                                        <td>{{ student.name }}</td>
+                                        <td>{{ student.tutorial1_score|default:"—" }}</td>
+                                        <td>{{ student.tutorial2_score|default:"—" }}</td>
+                                        <td>{{ student.tutorial3_score|default:"—" }}</td>
+                                        <td>{{ student.tutorial4_score|default:"—" }}</td>
+                                        <td>{{ student.tutorial_average|floatformat:1|default:"—" }}</td>
+                                        <td class="fw-bold">{{ student.tutorialScore|floatformat:1|default:"—" }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="alert alert-info mt-3">
+                            <i class="bi bi-info-circle"></i> <strong>Tutorial Calculation:</strong> The average of 4 tutorial scores is scaled to 15 marks.
+                        </div>
+                    </div>
+                    
+                    <!-- CA Tab -->
+                    <div class="tab-pane fade" id="cas" role="tabpanel" aria-labelledby="cas-tab">
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Roll Number</th>
+                                        <th>Name</th>
+                                        <th>CA1 Original (out of 50)</th>
+                                        <th>CA1 Scaled (out of 20)</th>
+                                        <th>CA2 Original (out of 50)</th>
+                                        <th>CA2 Scaled (out of 20)</th>
+                                        <th>CA Average (out of 20)</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for student in students %}
+                                    <tr>
+                                        <td>{{ student.rollno }}</td>
+                                        <td>{{ student.name }}</td>
+                                        <td>{{ student.ca1_original|default:"—" }}</td>
+                                        <td>{{ student.ca1_scaled|floatformat:1|default:"—" }}</td>
+                                        <td>{{ student.ca2_original|default:"—" }}</td>
+                                        <td>{{ student.ca2_scaled|floatformat:1|default:"—" }}</td>
+                                        <td class="fw-bold">{{ student.caScore|floatformat:1|default:"—" }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="alert alert-info mt-3">
+                            <i class="bi bi-info-circle"></i> <strong>CA Calculation:</strong> Each CA is originally marked out of 50 and scaled down to 20 marks. The average of both CAs gives the final CA component mark out of 20.
+                        </div>
+                    </div>
+                    
+                    <!-- Assignments Tab -->
+                    <div class="tab-pane fade" id="assignments" role="tabpanel" aria-labelledby="assignments-tab">
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Roll Number</th>
+                                        <th>Name</th>
+                                        <th>Assignment Score</th>
+                                        <th>Presentation Score</th>
+                                        <th>Total (out of 15)</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for student in students %}
+                                    <tr>
+                                        <td>{{ student.rollno }}</td>
+                                        <td>{{ student.name }}</td>
+                                        <td>{{ student.assignment_score|default:"—" }}</td>
+                                        <td>{{ student.presentation_score|default:"—" }}</td>
+                                        <td class="fw-bold">{{ student.assignmentScore|floatformat:1|default:"—" }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="alert alert-info mt-3">
+                            <i class="bi bi-info-circle"></i> <strong>Assignment & Presentation Calculation:</strong> Combined score out of 15 marks.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Score Distribution Visualization -->
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">Score Distribution</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <canvas id="scoreDistributionChart" height="300"></canvas>
+                    </div>
+                    <div class="col-md-6">
+                        <canvas id="componentComparisonChart" height="300"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Student Performance Details Modals -->
+        {% for student in students %}
+        <div class="modal fade" id="studentDetailModal{{ student.rollno|slugify }}" tabindex="-1" aria-labelledby="studentDetailModalLabel{{ student.rollno|slugify }}" aria-hidden="true">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="studentDetailModalLabel{{ student.rollno|slugify }}">{{ student.name }} ({{ student.rollno }})</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h6>Tutorial Marks</h6>
+                                <table class="table table-sm">
+                                    <thead>
+                                        <tr>
+                                            <th>Tutorial</th>
+                                            <th>Score</th>
+                                            <th>Out of</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td>Tutorial 1</td>
+                                            <td>{{ student.tutorial1_score|default:"—" }}</td>
+                                            <td>{{ tutorial_max_marks }}</td>
+                                        </tr>
+                                        <tr>
+                                            <td>Tutorial 2</td>
+                                            <td>{{ student.tutorial2_score|default:"—" }}</td>
+                                            <td>{{ tutorial_max_marks }}</td>
+                                        </tr>
+                                        <tr>
+                                            <td>Tutorial 3</td>
+                                            <td>{{ student.tutorial3_score|default:"—" }}</td>
+                                            <td>{{ tutorial_max_marks }}</td>
+                                        </tr>
+                                        <tr>
+                                            <td>Tutorial 4</td>
+                                            <td>{{ student.tutorial4_score|default:"—" }}</td>
+                                            <td>{{ tutorial_max_marks }}</td>
+                                        </tr>
+                                        <tr class="table-light">
+                                            <td><strong>Average</strong></td>
+                                            <td>{{ student.tutorial_average|floatformat:1 }}</td>
+                                            <td>{{ tutorial_max_marks }}</td>
+                                        </tr>
+                                        <tr class="table-primary">
+                                            <td><strong>Final (scaled)</strong></td>
+                                            <td>{{ student.tutorialScore|floatformat:1|default:"—" }}</td>
+                                            <td>15</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="col-md-6">
+                                <h6>Continuous Assessment</h6>
+                                <table class="table table-sm">
+                                    <thead>
+                                        <tr>
+                                            <th>Assessment</th>
+                                            <th>Original</th>
+                                            <th>Scaled</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td>CA 1</td>
+                                            <td>{{ student.ca1_original|default:"—" }}/50</td>
+                                            <td>{{ student.ca1_scaled|floatformat:1 }}/20</td>
+                                        </tr>
+                                        <tr>
+                                            <td>CA 2</td>
+                                            <td>{{ student.ca2_original|default:"—" }}/50</td>
+                                            <td>{{ student.ca2_scaled|floatformat:1 }}/20</td>
+                                        </tr>
+                                        <tr class="table-primary">
+                                            <td><strong>CA Average</strong></td>
+                                            <td colspan="2">{{ student.caScore|floatformat:1|default:"—" }}/20</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                                
+                                <h6 class="mt-4">Assignment & Presentation</h6>
+                                <table class="table table-sm">
+                                    <thead>
+                                        <tr>
+                                            <th>Component</th>
+                                            <th>Score</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td>Assignment</td>
+                                            <td>{{ student.assignment_score|default:"—" }}</td>
+                                        </tr>
+                                        <tr>
+                                            <td>Presentation</td>
+                                            <td>{{ student.presentation_score|default:"—" }}</td>
+                                        </tr>
+                                        <tr class="table-primary">
+                                            <td><strong>Total</strong></td>
+                                            <td>{{ student.assignmentScore|floatformat:1|default:"—" }}/15</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        
+                        <div class="row mt-4">
+                            <div class="col-12">
+                                <h6>Internal Marks Calculation</h6>
+                                <table class="table">
+                                    <thead>
+                                        <tr>
+                                            <th>Component</th>
+                                            <th>Marks</th>
+                                            <th>Max</th>
+                                            <th>Formula</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td>Tutorials</td>
+                                            <td>{{ student.tutorialScore|floatformat:1|default:"—" }}</td>
+                                            <td>15</td>
+                                            <td><code>Average of 4 tutorials × (15 ÷ {{ tutorial_max_marks }})</code></td>
+                                        </tr>
+                                        <tr>
+                                            <td>CAs</td>
+                                            <td>{{ student.caScore|floatformat:1|default:"—" }}</td>
+                                            <td>20</td>
+                                            <td><code>Average of (CA1 × 0.4) and (CA2 × 0.4)</code></td>
+                                        </tr>
+                                        <tr>
+                                            <td>Assignment & Presentation</td>
+                                            <td>{{ student.assignmentScore|floatformat:1|default:"—" }}</td>
+                                            <td>15</td>
+                                            <td><code>Assignment + Presentation</code></td>
+                                        </tr>
+                                        <tr class="table-secondary">
+                                            <td><strong>Internal Total</strong></td>
+                                            <td>{{ student.internalTotal|floatformat:1|default:"—" }}</td>
+                                            <td>50</td>
+                                            <td><code>Tutorials + CAs + Assignment</code></td>
+                                        </tr>
+                                        <tr class="table-primary">
+                                            <td><strong>Final Internal (Converted)</strong></td>
+                                            <td>{{ student.finalInternal|floatformat:1|default:"—" }}</td>
+                                            <td>40</td>
+                                            <td><code>Internal Total × (40 ÷ 50)</code></td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <a href="{% url 'academic_integration:edit_student_marks' %}?course_id={{ course.courseId }}&student_id={{ student.rollno }}" class="btn btn-primary">
+                            <i class="bi bi-pencil"></i> Edit Marks
+                        </a>
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    {% endif %}
+</div>
+
+{% if selected_course %}
+<!-- Include Chart.js for visualizations -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.1/dist/chart.min.js"></script>
+<script>
+    // Score Distribution Chart
+    const scoreCtx = document.getElementById('scoreDistributionChart').getContext('2d');
+    const scoreDistributionChart = new Chart(scoreCtx, {
+        type: 'bar',
+        data: {
+            labels: ['0-20%', '21-40%', '41-60%', '61-70%', '71-80%', '81-90%', '91-100%'],
+            datasets: [{
+                label: 'Number of Students',
+                data: [
+                    {{ score_ranges.range_0_20 }}, 
+                    {{ score_ranges.range_21_40 }}, 
+                    {{ score_ranges.range_41_60 }}, 
+                    {{ score_ranges.range_61_70 }}, 
+                    {{ score_ranges.range_71_80 }}, 
+                    {{ score_ranges.range_81_90 }}, 
+                    {{ score_ranges.range_91_100 }}
+                ],
+                backgroundColor: [
+                    'rgba(220, 53, 69, 0.7)',   // Red (0-20%)
+                    'rgba(253, 126, 20, 0.7)',  // Orange (21-40%)
+                    'rgba(255, 193, 7, 0.7)',   // Yellow (41-60%)
+                    'rgba(13, 202, 240, 0.7)',  // Cyan (61-70%)
+                    'rgba(13, 110, 253, 0.7)',  // Blue (71-80%)
+                    'rgba(25, 135, 84, 0.7)',   // Green (81-90%)
+                    'rgba(25, 135, 84, 0.9)',   // Dark Green (91-100%)
+                ],
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    title: {
+                        display: true,
+                        text: 'Number of Students'
+                    }
+                },
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Score Range'
+                    }
+                }
+            },
+            plugins: {
+                title: {
+                    display: true,
+                    text: 'Student Score Distribution'
+                },
+                legend: {
+                    display: false
+                }
+            }
+        }
+    });
+    
+    // Component Comparison Chart
+    const componentCtx = document.getElementById('componentComparisonChart').getContext('2d');
+    const componentComparisonChart = new Chart(componentCtx, {
+        type: 'radar',
+        data: {
+            labels: ['Tutorials', 'CAs', 'Assignment & Presentation'],
+            datasets: [{
+                label: 'Class Average Performance (%)',
+                data: [
+                    {{ component_performance.tutorial_percentage }},
+                    {{ component_performance.ca_percentage }},
+                    {{ component_performance.assignment_percentage }}
+                ],
+                backgroundColor: 'rgba(13, 110, 253, 0.2)',
+                borderColor: 'rgba(13, 110, 253, 1)',
+                borderWidth: 2,
+                pointBackgroundColor: 'rgba(13, 110, 253, 1)'
+            }]
+        },
+        options: {
+            responsive: true,
+            scales: {
+                r: {
+                    angleLines: {
+                        display: true
+                    },
+                    suggestedMin: 0,
+                    suggestedMax: 100
+                }
+            },
+            plugins: {
+                title: {
+                    display: true,
+                    text: 'Component-wise Performance'
+                }
+            }
+        }
+    });
+</script>
+{% endif %}
+{% endblock %}

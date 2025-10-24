@@ -1,0 +1,871 @@
+{% extends "academic_integration/base.html" %}
+{% load static %}
+
+{% block title %}{{ quiz.title }}{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h1 class="h2 mb-3">{{ quiz.title }}</h1>
+        {% if quiz.description %}
+        <p class="lead">{{ quiz.description }}</p>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Fullscreen Start Button -->
+<div id="fullscreen-start-container" class="card shadow-sm mb-4 border-danger" style="display: none;">
+    <div class="card-body text-center py-5">
+        <div class="mb-4">
+            <i class="bi bi-fullscreen text-danger" style="font-size: 4rem;"></i>
+        </div>
+        <h2 class="mb-3 text-danger">⚠️ Fullscreen Mode Required</h2>
+        <p class="lead mb-2">This quiz can only be taken in fullscreen mode.</p>
+        <p class="text-muted mb-4">
+            <small>
+                • No questions will be visible until you enter fullscreen<br>
+                • Exiting fullscreen will end the quiz immediately<br>
+                • Switching tabs will end the quiz immediately
+            </small>
+        </p>
+        <button id="start-fullscreen-quiz" class="btn btn-danger btn-lg px-5 py-3">
+            <i class="bi bi-arrows-fullscreen"></i> Enter Fullscreen to Begin Quiz
+        </button>
+    </div>
+</div>
+
+<div class="card shadow-sm mb-4">
+    <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <div>
+                <h5 class="card-title mb-0">Quiz Information</h5>
+                <p class="text-muted mb-0">{{ quiz.get_quiz_type_display }}</p>
+            </div>
+            <div>
+                <span id="timer" class="badge bg-primary fs-6 px-3 py-2">Time: --:--</span>
+            </div>
+        </div>
+        
+        <div class="row mb-3">
+            <div class="col-md-3">
+                <p><strong>Duration:</strong> {{ quiz.duration_minutes }} minutes</p>
+            </div>
+            <div class="col-md-3">
+                <p>
+                    <strong>Questions:</strong> {{ quiz.questions.count }}
+                </p>
+            </div>
+            <div class="col-md-3">
+                <p>
+                    <strong>Completion:</strong>
+                    {% if quiz.complete_by_date %}
+                        {{ quiz.complete_by_date|date:"M d, Y H:i" }}
+                    {% else %}
+                        No deadline
+                    {% endif %}
+                </p>
+            </div>
+            <div class="col-md-3">
+                <p>
+                    <strong>Results:</strong>
+                    {% if quiz.show_results %}Immediate{% else %}Hidden{% endif %}
+                </p>
+            </div>
+        </div>
+        
+        <div id="not-started" style="display: none;">
+            <div class="alert alert-info">
+                <p>This quiz has {{ quiz.duration_minutes }} minutes time limit. Once you start, the timer will begin.</p>
+                <p>Are you ready to begin the quiz?</p>
+                <button id="start-quiz-btn" class="btn btn-primary">Start Quiz</button>
+            </div>
+        </div>
+        
+        <div id="quiz-content" style="display: none;">
+            <form id="quiz-form">
+                {% csrf_token %}
+                <div id="questions-container">
+                    <!-- Questions will be loaded here dynamically -->
+                </div>
+                
+                <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-4">
+                    <button type="button" class="btn btn-secondary" id="prev-btn" disabled>Previous</button>
+                    <button type="button" class="btn btn-primary" id="next-btn">Next</button>
+                    <button type="submit" class="btn btn-success" id="submit-btn" style="display: none;">Submit Quiz</button>
+                </div>
+                
+                <div class="progress mt-4">
+                    <div class="progress-bar" id="progress-bar" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
+                </div>
+            </form>
+        </div>
+        
+        <div id="expired" style="display: none;">
+            <div class="alert alert-danger">
+                <h5 class="alert-heading">Time's Up!</h5>
+                <p>Your time for this quiz has expired. Your answers have been automatically submitted.</p>
+            </div>
+        </div>
+        
+        <div id="completed" style="display: none;">
+            <div class="alert alert-success">
+                <h5 class="alert-heading">Quiz Completed!</h5>
+                <p>You have already completed this quiz.</p>
+                {% if quiz.allow_review %}
+                <a href="{% url 'academic_integration:quiz_result' quiz.id %}" class="btn btn-primary">View Results</a>
+                {% endif %}
+            </div>
+        </div>
+        
+        <div id="loading" class="text-center py-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="mt-3">Loading quiz...</p>
+        </div>
+</div>
+
+<script>
+    // Quiz state
+    let quizData = null;
+    let quizAttempt = null;
+    let currentQuestion = 0;
+    let totalQuestions = 0;
+    let answers = {};
+    let timer = null;
+    let timeRemaining = 0;
+    
+    // Debug function to log answers state
+    function logAnswersState(source) {
+        console.log(`[${source}] Current answers:`, JSON.stringify(answers));
+        console.log(`[${source}] Answer keys:`, Object.keys(answers));
+    }
+
+    // When DOM is ready
+    document.addEventListener('DOMContentLoaded', function() {
+        // Load quiz data automatically
+        loadQuizData();
+        
+        // Event listeners for quiz navigation
+        document.getElementById('start-quiz-btn').addEventListener('click', startQuiz);
+        document.getElementById('prev-btn').addEventListener('click', showPreviousQuestion);
+        document.getElementById('next-btn').addEventListener('click', showNextQuestion);
+        document.getElementById('quiz-form').addEventListener('submit', submitQuiz);
+    });
+    
+    function loadQuizData() {
+        fetch(`/academic_integration/api/quiz/{{ quiz.id }}/`, {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                quizData = data.quiz;
+                quizAttempt = data.attempt;
+                
+                // Hide loading
+                document.getElementById('loading').style.display = 'none';
+                
+                // Set quiz state based on attempt
+                if (quizAttempt && quizAttempt.completed_at) {
+                    // Quiz already completed
+                    document.getElementById('completed').style.display = 'block';
+                } else if (quizAttempt && quizAttempt.started_at) {
+                    // Quiz in progress
+                    startQuizWithAttempt();
+                } else {
+                    // Quiz not started
+                    document.getElementById('not-started').style.display = 'block';
+                }
+            } else {
+                alert('Error loading quiz: ' + data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('An error occurred while loading the quiz.');
+        });
+    }
+    
+    function startQuiz() {
+        fetch(`/academic_integration/api/quiz/{{ quiz.id }}/attempt/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                quizAttempt = data.attempt;
+                
+                // Hide not started section
+                document.getElementById('not-started').style.display = 'none';
+                
+                // Start quiz
+                startQuizWithAttempt();
+            } else {
+                alert('Error starting quiz: ' + data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('An error occurred while starting the quiz.');
+        });
+    }
+    
+    function startQuizWithAttempt() {
+        // Setup quiz UI
+        document.getElementById('quiz-content').style.display = 'block';
+        
+        // Initialize questions
+        totalQuestions = quizData.questions.length;
+        console.log(`Quiz has ${totalQuestions} questions`);
+        
+        // Create questions
+        createQuestions();
+        
+        // Show first question
+        showQuestion(0);
+        
+        // Start timer
+        if (quizAttempt.time_remaining_seconds > 0) {
+            timeRemaining = quizAttempt.time_remaining_seconds;
+        } else {
+            timeRemaining = quizData.duration_minutes * 60;
+        }
+        
+        startTimer();
+        
+        // Debug: Check quiz initialization
+        setTimeout(() => {
+            console.log('Quiz initialization check:');
+            console.log('Total questions:', totalQuestions);
+            console.log('Quiz attempt ID:', quizAttempt.id);
+            console.log('Quiz data:', quizData);
+            console.log('Questions container content:', document.getElementById('questions-container').innerHTML);
+            console.log('Radio/checkbox inputs count:', document.querySelectorAll('input[type="radio"], input[type="checkbox"]').length);
+            console.log('Textarea inputs count:', document.querySelectorAll('textarea').length);
+            logAnswersState('initialization_check');
+        }, 1000);
+    }
+    
+    function createQuestions() {
+        const questionsContainer = document.getElementById('questions-container');
+        questionsContainer.innerHTML = '';
+        
+        // Initialize empty answers object
+        answers = {};
+        
+        console.log(`Creating questions UI for ${quizData.questions.length} questions`);
+        
+        quizData.questions.forEach((question, index) => {
+            console.log(`Creating UI for question ${index + 1}: ${question.text} (ID: ${question.id}, Type: ${question.question_type})`);
+            if (question.choices) {
+                console.log(`Question has ${question.choices.length} choices`);
+            }
+            const questionDiv = document.createElement('div');
+            questionDiv.classList.add('question', 'mb-4');
+            questionDiv.dataset.questionIndex = index;
+            questionDiv.style.display = 'none';
+            
+            const questionHeader = document.createElement('h5');
+            questionHeader.textContent = `Question ${index + 1} of ${totalQuestions}`;
+            questionDiv.appendChild(questionHeader);
+            
+            const questionText = document.createElement('div');
+            questionText.classList.add('card', 'mb-3');
+            questionText.innerHTML = `
+                <div class="card-body">
+                    <p class="card-text">${question.text}</p>
+                </div>
+            `;
+            questionDiv.appendChild(questionText);
+            
+            const answerContainer = document.createElement('div');
+            answerContainer.classList.add('answer-container');
+            
+            if (question.question_type === 'mcq_single') {
+                // Single choice question
+                question.choices.forEach((choice, choiceIndex) => {
+                    const choiceDiv = document.createElement('div');
+                    choiceDiv.classList.add('form-check', 'mb-2');
+                    
+                    // Log the choice object to help with debugging
+                    console.log(`MCQ Single: Choice for question ${question.id}:`, choice);
+                    
+                    // Always use the actual choice ID from the database
+                    // This ensures we're using the actual database ID
+                    const choiceId = choice.id;
+                    
+                    choiceDiv.innerHTML = `
+                        <input class="form-check-input" type="radio" name="question_${question.id}" id="choice_${question.id}_${choiceId}" value="${choiceId}">
+                        <label class="form-check-label" for="choice_${question.id}_${choiceId}">
+                            ${choice.text}
+                        </label>
+                    `;
+                    answerContainer.appendChild(choiceDiv);
+                    
+                    // Add event listener to save answer
+                    const input = choiceDiv.querySelector('input');
+                    input.addEventListener('change', function() {
+                        if (this.checked) {
+                            answers[`question_${question.id}`] = parseInt(this.value) || this.value;
+                            console.log(`MCQ Single answer selected for question_${question.id}:`, this.value);
+                            updateProgress();
+                            logAnswersState('mcq_single_change');
+                        }
+                    });
+                });
+            } else if (question.question_type === 'mcq_multiple') {
+                // Multiple choice question
+                question.choices.forEach((choice, choiceIndex) => {
+                    const choiceDiv = document.createElement('div');
+                    choiceDiv.classList.add('form-check', 'mb-2');
+                    
+                    // Log the choice object to help with debugging
+                    console.log(`MCQ Multiple: Choice for question ${question.id}:`, choice);
+                    
+                    // Always use the actual choice ID from the database
+                    // This ensures we're using the actual database ID
+                    const choiceId = choice.id;
+                    
+                    choiceDiv.innerHTML = `
+                        <input class="form-check-input" type="checkbox" name="question_${question.id}" id="choice_${question.id}_${choiceId}" value="${choiceId}">
+                        <label class="form-check-label" for="choice_${question.id}_${choiceId}">
+                            ${choice.text}
+                        </label>
+                    `;
+                    answerContainer.appendChild(choiceDiv);
+                    
+                    // Add event listener to save answer
+                    const input = choiceDiv.querySelector('input');
+                    input.addEventListener('change', function() {
+                        // Get all selected choices
+                        const checkboxes = document.querySelectorAll(`input[name="question_${question.id}"]:checked`);
+                        const selected = Array.from(checkboxes).map(cb => {
+                            // Try to convert to integer, fall back to original value if NaN
+                            const parsed = parseInt(cb.value);
+                            return isNaN(parsed) ? cb.value : parsed;
+                        });
+                        answers[`question_${question.id}`] = selected;
+                        console.log(`MCQ Multiple answer updated for question_${question.id}:`, selected);
+                        updateProgress();
+                        logAnswersState('mcq_multiple_change');
+                    });
+                });
+                
+                answerContainer.appendChild(document.createElement('hr'));
+                answerContainer.appendChild(document.createElement('p')).textContent = 'Select all that apply.';
+            } else if (question.question_type === 'text') {
+                // Text input question
+                const textDiv = document.createElement('div');
+                textDiv.classList.add('form-group');
+                textDiv.innerHTML = `
+                    <textarea class="form-control" id="question_${question.id}" rows="3" placeholder="Type your answer here..."></textarea>
+                `;
+                answerContainer.appendChild(textDiv);
+                
+                // Add event listener to save answer
+                const textarea = textDiv.querySelector('textarea');
+                textarea.addEventListener('input', function() {
+                    answers[`question_${question.id}`] = this.value.trim(); // Trim to remove whitespace
+                    console.log(`Text answer updated for question_${question.id}:`, this.value);
+                    updateProgress();
+                    logAnswersState('text_input');
+                });
+            } else if (question.question_type === 'true_false') {
+                // True/False question
+                const trueDiv = document.createElement('div');
+                trueDiv.classList.add('form-check', 'mb-2');
+                trueDiv.innerHTML = `
+                    <input class="form-check-input" type="radio" name="question_${question.id}" id="true_${question.id}" value="true">
+                    <label class="form-check-label" for="true_${question.id}">
+                        True
+                    </label>
+                `;
+                answerContainer.appendChild(trueDiv);
+                
+                const falseDiv = document.createElement('div');
+                falseDiv.classList.add('form-check', 'mb-2');
+                falseDiv.innerHTML = `
+                    <input class="form-check-input" type="radio" name="question_${question.id}" id="false_${question.id}" value="false">
+                    <label class="form-check-label" for="false_${question.id}">
+                        False
+                    </label>
+                `;
+                answerContainer.appendChild(falseDiv);
+                
+                // Add event listeners to save answer
+                const trueInput = trueDiv.querySelector('input');
+                const falseInput = falseDiv.querySelector('input');
+                
+                trueInput.addEventListener('change', function() {
+                    if (this.checked) {
+                        // Use string 'true' instead of boolean true to avoid serialization issues
+                        answers[`question_${question.id}`] = 'true';
+                        console.log(`True/False answer set to TRUE for question_${question.id}`);
+                        updateProgress();
+                        logAnswersState('true_false_true');
+                    }
+                });
+                
+                falseInput.addEventListener('change', function() {
+                    if (this.checked) {
+                        // Use string 'false' instead of boolean false to avoid serialization issues
+                        answers[`question_${question.id}`] = 'false';
+                        console.log(`True/False answer set to FALSE for question_${question.id}`);
+                        updateProgress();
+                        logAnswersState('true_false_false');
+                    }
+                });
+            }
+            
+            questionDiv.appendChild(answerContainer);
+            questionsContainer.appendChild(questionDiv);
+        });
+    }
+    
+    function showQuestion(index) {
+        // Hide all questions
+        document.querySelectorAll('.question').forEach(q => {
+            q.style.display = 'none';
+        });
+        
+        // Show the current question
+        document.querySelector(`.question[data-question-index="${index}"]`).style.display = 'block';
+        
+        // Update navigation buttons
+        document.getElementById('prev-btn').disabled = (index === 0);
+        
+        if (index === totalQuestions - 1) {
+            document.getElementById('next-btn').style.display = 'none';
+            document.getElementById('submit-btn').style.display = 'inline-block';
+        } else {
+            document.getElementById('next-btn').style.display = 'inline-block';
+            document.getElementById('submit-btn').style.display = 'none';
+        }
+        
+        // Update current question
+        currentQuestion = index;
+    }
+    
+    function showPreviousQuestion() {
+        if (currentQuestion > 0) {
+            showQuestion(currentQuestion - 1);
+        }
+    }
+    
+    function isCurrentQuestionAnswered() {
+        // Get the current question data
+        if (!quizData || !quizData.questions || currentQuestion >= quizData.questions.length) {
+            return false;
+        }
+        
+        const currentQuestionData = quizData.questions[currentQuestion];
+        const questionKey = `question_${currentQuestionData.id}`;
+        const answer = answers[questionKey];
+        
+        // Check if answer exists and is not empty
+        if (answer === undefined || answer === null) {
+            return false;
+        }
+        
+        // For text questions, check if not empty
+        if (currentQuestionData.question_type === 'text') {
+            return typeof answer === 'string' && answer.trim() !== '';
+        }
+        
+        // For multiple choice, check if array is not empty
+        if (currentQuestionData.question_type === 'mcq_multiple') {
+            return Array.isArray(answer) && answer.length > 0;
+        }
+        
+        // For other types (mcq_single, true_false), just check if value exists
+        return true;
+    }
+    
+    function showNextQuestion() {
+        // Validate that current question is answered
+        if (!isCurrentQuestionAnswered()) {
+            // Show alert message
+            const alertDiv = document.createElement('div');
+            alertDiv.className = 'alert alert-warning alert-dismissible fade show mt-3';
+            alertDiv.innerHTML = `
+                <strong>⚠️ Answer Required:</strong> Please answer the current question before moving to the next one.
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            `;
+            
+            // Insert alert at the top of the current question
+            const currentQuestionDiv = document.querySelector(`.question[data-question-index="${currentQuestion}"]`);
+            if (currentQuestionDiv) {
+                // Remove any existing alert
+                const existingAlert = currentQuestionDiv.querySelector('.alert-warning');
+                if (existingAlert) {
+                    existingAlert.remove();
+                }
+                
+                currentQuestionDiv.insertBefore(alertDiv, currentQuestionDiv.firstChild);
+                
+                // Auto-remove alert after 5 seconds
+                setTimeout(() => {
+                    alertDiv.remove();
+                }, 5000);
+            }
+            
+            return; // Don't proceed to next question
+        }
+        
+        if (currentQuestion < totalQuestions - 1) {
+            showQuestion(currentQuestion + 1);
+        }
+    }
+    
+    function updateProgress() {
+        const answeredQuestions = Object.keys(answers).length;
+        const percentage = Math.round((answeredQuestions / totalQuestions) * 100);
+        
+        const progressBar = document.getElementById('progress-bar');
+        progressBar.style.width = `${percentage}%`;
+        progressBar.textContent = `${percentage}%`;
+        progressBar.setAttribute('aria-valuenow', percentage);
+    }
+    
+    function startTimer() {
+        timer = setInterval(function() {
+            if (timeRemaining <= 0) {
+                clearInterval(timer);
+                document.getElementById('quiz-content').style.display = 'none';
+                document.getElementById('expired').style.display = 'block';
+                
+                // Auto-submit
+                submitQuiz(null, true);
+            } else {
+                timeRemaining--;
+                updateTimerDisplay();
+            }
+        }, 1000);
+        
+        updateTimerDisplay();
+    }
+    
+    function updateTimerDisplay() {
+        const minutes = Math.floor(timeRemaining / 60);
+        const seconds = timeRemaining % 60;
+        document.getElementById('timer').textContent = `Time: ${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        
+        // Change color when time is running low
+        if (timeRemaining <= 60) {
+            document.getElementById('timer').classList.remove('bg-primary');
+            document.getElementById('timer').classList.add('bg-danger');
+        }
+    }
+    
+    function submitQuiz(event, isAutoSubmit = false) {
+        if (event) {
+            event.preventDefault();
+        }
+        
+        // Check if all questions are answered (only for manual submit)
+        if (!isAutoSubmit) {
+            const unansweredCount = quizData.questions.filter((q, idx) => {
+                const questionKey = `question_${q.id}`;
+                const answer = answers[questionKey];
+                
+                if (answer === undefined || answer === null) return true;
+                if (q.question_type === 'text' && typeof answer === 'string' && answer.trim() === '') return true;
+                if (q.question_type === 'mcq_multiple' && Array.isArray(answer) && answer.length === 0) return true;
+                
+                return false;
+            }).length;
+            
+            if (unansweredCount > 0) {
+                showModal('Incomplete Quiz', `You have ${unansweredCount} unanswered question(s). Please answer all questions before submitting.`, 'warning');
+                return;
+            }
+            
+            // Show confirmation modal for manual submit
+            showConfirmModal(
+                'Submit Quiz?', 
+                'Are you sure you want to submit the quiz? You cannot make changes after submission.',
+                function() {
+                    // User confirmed, proceed with submission
+                    performQuizSubmission(isAutoSubmit);
+                }
+            );
+            return;
+        }
+        
+        // For auto-submit, proceed directly
+        performQuizSubmission(isAutoSubmit);
+    }
+    
+    function performQuizSubmission(isAutoSubmit) {
+        
+        // Stop timer
+        clearInterval(timer);
+        
+        // Debug: Log all answers before cleaning
+        console.log("Raw answers object:", JSON.stringify(answers));
+        console.log("Raw answers keys:", Object.keys(answers));
+        
+        // Clean up answers by removing undefined and null values
+        const cleanAnswers = {};
+        
+        // First, manually check each question on the page to see if any answers were selected
+        if (quizData && quizData.questions) {
+            quizData.questions.forEach(question => {
+                const questionKey = `question_${question.id}`;
+                
+                // For each question, check if there's already an answer in our answers object
+                if (answers[questionKey] !== undefined && answers[questionKey] !== null) {
+                    // For text questions, ensure the answer is not just whitespace
+                    if (question.question_type === 'text' && typeof answers[questionKey] === 'string') {
+                        if (answers[questionKey].trim() !== '') {
+                            cleanAnswers[questionKey] = answers[questionKey].trim();
+                        } else {
+                            console.log(`Skipping empty text answer for ${questionKey}`);
+                        }
+                    } 
+                    // For mcq_multiple questions, ensure the array is not empty
+                    else if (question.question_type === 'mcq_multiple' && Array.isArray(answers[questionKey])) {
+                        if (answers[questionKey].length > 0) {
+                            cleanAnswers[questionKey] = answers[questionKey];
+                        } else {
+                            console.log(`Skipping empty multiple choice answer for ${questionKey}`);
+                        }
+                    }
+                    // For other question types, include the answer as is
+                    else {
+                        cleanAnswers[questionKey] = answers[questionKey];
+                    }
+                } else {
+                    console.log(`No answer found for ${questionKey}`);
+                    
+                    // Fallback: try to find the answer in the DOM directly
+                    if (question.question_type === 'mcq_single' || question.question_type === 'true_false') {
+                        const selectedRadio = document.querySelector(`input[name="${questionKey}"]:checked`);
+                        if (selectedRadio) {
+                            cleanAnswers[questionKey] = selectedRadio.value;
+                            console.log(`Retrieved answer from DOM for ${questionKey}:`, selectedRadio.value);
+                        }
+                    } else if (question.question_type === 'mcq_multiple') {
+                        const selectedCheckboxes = document.querySelectorAll(`input[name="${questionKey}"]:checked`);
+                        if (selectedCheckboxes.length > 0) {
+                            cleanAnswers[questionKey] = Array.from(selectedCheckboxes).map(cb => parseInt(cb.value));
+                            console.log(`Retrieved answer from DOM for ${questionKey}:`, cleanAnswers[questionKey]);
+                        }
+                    } else if (question.question_type === 'text') {
+                        const textArea = document.getElementById(questionKey);
+                        if (textArea && textArea.value.trim() !== '') {
+                            cleanAnswers[questionKey] = textArea.value.trim();
+                            console.log(`Retrieved answer from DOM for ${questionKey}:`, textArea.value);
+                        }
+                    }
+                }
+            });
+        }
+        
+        // Debug: Log clean answers
+        console.log("Clean answers object:", JSON.stringify(cleanAnswers));
+        console.log("Clean answers keys:", Object.keys(cleanAnswers));
+        
+        // Check if we have any valid answers
+        if (Object.keys(cleanAnswers).length === 0) {
+            showModal('No Answers', "You haven't answered any questions. Please answer at least one question before submitting.", 'warning');
+            
+            // Restart the timer if this wasn't an auto-submit
+            if (!isAutoSubmit) {
+                startTimer();
+            }
+            return;
+        }
+        
+        // Submit answers
+        console.log("Submitting answers:", cleanAnswers);
+        
+        // Create a more robust request with error handling
+        try {
+            console.log("Preparing submission with clean answers:", JSON.stringify(cleanAnswers));
+            
+            fetch(`/academic_integration/api/quiz/{{ quiz.id }}/submit/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                },
+                body: JSON.stringify({answers: cleanAnswers})
+            })
+            .then(response => {
+                console.log("Response status:", response.status);
+                if (!response.ok) {
+                    console.error("Error status:", response.status);
+                    if (response.status === 500) {
+                        // For 500 errors, try to display more useful information
+                        return response.text().then(text => {
+                            console.error("Error response text:", text);
+                            // Try to find useful error message in HTML response
+                            const errorMatch = text.match(/<pre[^>]*>([\s\S]*?)<\/pre>/);
+                            const errorMessage = errorMatch ? errorMatch[1] : "Server error occurred";
+                            throw new Error(`Server error (500): ${errorMessage}`);
+                        });
+                    }
+                }
+                return response.text().then(text => {
+                    try {
+                        return JSON.parse(text);
+                    } catch (e) {
+                        console.error("JSON parse error:", e, "Response was:", text);
+                        // If response isn't valid JSON but contains HTML, it might be a server error page
+                        if (text.includes('<!DOCTYPE html>')) {
+                            throw new Error('Server returned HTML instead of JSON. This is likely a server error.');
+                        }
+                        return { success: false, error: "Invalid response format from server" };
+                    }
+                });
+            })
+            .then(data => {
+                console.log("Response data:", data);
+                if (data.success) {
+                    // Mark as submitting to prevent fullscreen exit errors
+                    if (typeof isSubmitting !== 'undefined') {
+                        isSubmitting = true;
+                    }
+                    
+                    // Show brief success message in modal (non-blocking)
+                    const resultMessage = data.tutorial_sync_status 
+                        ? 'Quiz submitted successfully! Your results have been synced. Redirecting to results...'
+                        : 'Quiz submitted successfully! Redirecting to results...';
+                    
+                    showModal('Success', resultMessage, 'success', true);
+                    
+                    // Auto-redirect to results page after brief delay
+                    setTimeout(() => {
+                        if (data.redirect) {
+                            window.location.href = data.redirect;
+                        } else {
+                            // Fallback: redirect to quiz result page
+                            window.location.href = `/academic_integration/quiz/{{ quiz.id }}/result/`;
+                        }
+                    }, 1500);
+                } else {
+                    showModal('Submission Error', 'Error submitting quiz: ' + (data.error || "Unknown error"), 'error');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showModal('Connection Error', 'An error occurred while submitting the quiz: ' + error.message, 'error');
+            });
+        } catch (error) {
+            console.error('Error in quiz submission process:', error);
+            showModal('Submission Error', 'An error occurred while preparing the quiz submission: ' + error.message, 'error');
+        }
+    }
+    
+    // Modal utility functions
+    function showModal(title, message, type = 'info', autoClose = false) {
+        const modal = document.getElementById('quizModal');
+        const modalTitle = document.getElementById('quizModalLabel');
+        const modalBody = document.getElementById('quizModalBody');
+        const modalHeader = modal.querySelector('.modal-header');
+        
+        // Set title and message
+        modalTitle.textContent = title;
+        modalBody.textContent = message;
+        
+        // Set header color based on type
+        modalHeader.className = 'modal-header';
+        if (type === 'success') {
+            modalHeader.classList.add('bg-success', 'text-white');
+        } else if (type === 'error') {
+            modalHeader.classList.add('bg-danger', 'text-white');
+        } else if (type === 'warning') {
+            modalHeader.classList.add('bg-warning', 'text-dark');
+        } else {
+            modalHeader.classList.add('bg-primary', 'text-white');
+        }
+        
+        // Show modal
+        const bsModal = new bootstrap.Modal(modal);
+        bsModal.show();
+        
+        // Auto-close if requested (for success messages before redirect)
+        if (autoClose) {
+            setTimeout(() => {
+                bsModal.hide();
+            }, 1200);
+        }
+    }
+    
+    function showConfirmModal(title, message, onConfirm) {
+        const modal = document.getElementById('confirmModal');
+        const modalTitle = document.getElementById('confirmModalLabel');
+        const modalBody = document.getElementById('confirmModalBody');
+        const confirmBtn = document.getElementById('confirmModalBtn');
+        
+        // Set title and message
+        modalTitle.textContent = title;
+        modalBody.textContent = message;
+        
+        // Show modal
+        const bsModal = new bootstrap.Modal(modal);
+        bsModal.show();
+        
+        // Handle confirm button click
+        const handleConfirm = () => {
+            bsModal.hide();
+            confirmBtn.removeEventListener('click', handleConfirm);
+            if (onConfirm) {
+                onConfirm();
+            }
+        };
+        
+        confirmBtn.addEventListener('click', handleConfirm);
+    }
+</script>
+
+<!-- Modal for notifications -->
+<div class="modal fade" id="quizModal" tabindex="-1" aria-labelledby="quizModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="quizModalLabel">Notification</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="quizModalBody">
+                Message content
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Confirmation Modal -->
+<div class="modal fade" id="confirmModal" tabindex="-1" aria-labelledby="confirmModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="confirmModalLabel">Confirm Action</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="confirmModalBody">
+                Are you sure?
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="confirmModalBtn">Confirm</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Load fullscreen JavaScript -->
+<script src="{% static 'academic_integration/js/quiz_fullscreen.js' %}"></script>
+{% endblock %}

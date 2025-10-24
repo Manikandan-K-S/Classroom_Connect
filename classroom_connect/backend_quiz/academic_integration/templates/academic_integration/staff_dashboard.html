@@ -1,0 +1,107 @@
+{% extends "academic_integration/base.html" %}
+
+{% block title %}Staff Dashboard{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h1 class="h3 mb-0">Academic Analyzer Dashboard</h1>
+        <p class="text-muted mb-0">Course overview and management</p>
+    </div>
+    <div class="text-end">
+        {% if staff_email %}
+            <span class="badge bg-light text-dark">{{ staff_email }}</span>
+        {% endif %}
+    </div>
+</div>
+
+{% if api_error %}
+    <div class="alert alert-warning alert-dismissible fade show" role="alert">
+        <div class="d-flex">
+            <div class="me-3">
+                <i class="bi bi-exclamation-triangle-fill fs-3"></i>
+            </div>
+            <div>
+                <h5>Connection Issue</h5>
+                <p>{{ api_error }}</p>
+                <button type="button" class="btn btn-sm btn-warning" onclick="window.location.reload()">
+                    <i class="bi bi-arrow-clockwise"></i> Refresh Page
+                </button>
+            </div>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+{% endif %}
+
+<!-- Quick Action Buttons -->
+<div class="row mb-4">
+    <div class="col-md-4">
+        <a href="{% url 'academic_integration:create_course' %}" class="card h-100 text-decoration-none">
+            <div class="card-body text-center d-flex flex-column align-items-center justify-content-center">
+                <i class="bi bi-journal-plus display-5 text-primary"></i>
+                <h5 class="mt-3">Create Course</h5>
+                <p class="text-muted">Create a new course for your students</p>
+            </div>
+        </a>
+    </div>
+    
+    <div class="col-md-4">
+        <a href="{% url 'academic_integration:manage_students' %}" class="card h-100 text-decoration-none">
+            <div class="card-body text-center d-flex flex-column align-items-center justify-content-center">
+                <i class="bi bi-people display-5 text-success"></i>
+                <h5 class="mt-3">Manage Students</h5>
+                <p class="text-muted">Add or view student accounts</p>
+            </div>
+        </a>
+    </div>
+    
+    <div class="col-md-4">
+        <a href="{% url 'academic_integration:admin_quiz_dashboard' %}" class="card h-100 text-decoration-none">
+            <div class="card-body text-center d-flex flex-column align-items-center justify-content-center">
+                <i class="bi bi-question-circle display-5 text-info"></i>
+                <h5 class="mt-3">Manage Quizzes</h5>
+                <p class="text-muted">Create and manage quizzes</p>
+            </div>
+        </a>
+    </div>
+</div>
+
+{% if courses %}
+    <div class="card shadow-sm">
+        <div class="card-header bg-white">
+            <strong>Your Courses</strong>
+        </div>
+        <div class="table-responsive">
+            <table class="table mb-0 align-middle">
+                <thead>
+                    <tr>
+                        <th scope="col">Course</th>
+                        <th scope="col">Course Code</th>
+                        <th scope="col">Batch</th>
+                        <th scope="col">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for course in courses %}
+                        <tr>
+                            <td>{{ course.courseName }}</td>
+                            <td>{{ course.courseCode|default:"-" }}</td>
+                            <td>{{ course.batch }}</td>
+                            <td>
+                                <a href="{% url 'academic_integration:manage_course' course_id=course.courseId %}" class="btn btn-sm btn-outline-primary">
+                                    <i class="bi bi-gear"></i> Manage
+                                </a>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+{% else %}
+    <div class="alert alert-info" role="alert">
+        <i class="bi bi-info-circle"></i> No courses found for your account yet. 
+        <a href="{% url 'academic_integration:create_course' %}" class="alert-link">Create your first course</a>
+    </div>
+{% endif %}
+{% endblock %}

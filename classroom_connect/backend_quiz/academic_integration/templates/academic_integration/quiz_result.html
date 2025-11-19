@@ -42,12 +42,8 @@
                 </div>
                 <div class="col-md-3">
                     <p class="mb-1 text-muted small">Score</p>
-                                    <p class="text-center">
-                    <strong>{{ quiz_attempt.score }} / {{ total_points }}</strong> points<br>
-                    <small>Total Questions: {{ total_questions }}</small>
-                </p>
-                    {% widthratio quiz_attempt.score total_points 100 as percentage %}
-                    <p class="small text-secondary">{{ percentage }}% score achieved</p>
+                    <h6 class="fw-bold">{{ quiz_attempt.score }} / {{ quiz_attempt.total_points }}</h6>
+                    <p class="small text-secondary">{{ quiz_attempt.percentage|floatformat:1 }}% score achieved</p>
                 </div>
             </div>
             
@@ -56,22 +52,21 @@
                     <div class="card h-100 border-0 shadow-sm">
                         <div class="card-body text-center">
                             <h5 class="mb-3 text-secondary"><i class="bi bi-percent me-2"></i>Score Percentage</h5>
-                            {% widthratio quiz_attempt.score total_points 100 as percentage %}
                             <div class="position-relative my-4">
                                 <div class="progress progress-lg">
                                     <div class="progress-bar bg-primary" 
                                         role="progressbar" 
                                         aria-label="Score percentage" 
-                                        aria-valuenow="{{ percentage|floatformat:0 }}" 
+                                        aria-valuenow="{{ quiz_attempt.percentage|floatformat:0 }}" 
                                         aria-valuemin="0" 
                                         aria-valuemax="100"
-                                        style="width: {{ percentage }}%;">
-                                        <span class="visually-hidden">{{ percentage }}%</span>
+                                        style="width: {{ quiz_attempt.percentage }}%;">
+                                        <span class="visually-hidden">{{ quiz_attempt.percentage|floatformat:1 }}%</span>
                                     </div>
                                 </div>
                                 <div class="position-absolute top-50 start-50 translate-middle">
                                     <div class="display-4 fw-bold">
-                                        {{ percentage }}%
+                                        {{ quiz_attempt.percentage|floatformat:1 }}%
                                     </div>
                                 </div>
                             </div>
@@ -103,7 +98,7 @@
                         <div class="card-body text-center">
                             <h5 class="mb-3 text-secondary"><i class="bi bi-award me-2"></i>Total Score</h5>
                             <div class="my-4">
-                                <div class="display-4 fw-bold">{{ quiz_attempt.score }} / {{ total_points }}</div>
+                                <div class="display-4 fw-bold">{{ quiz_attempt.score }} / {{ quiz_attempt.total_points }}</div>
                                 <div class="text-muted mt-2">Points earned</div>
                             </div>
                             {% if quiz.allow_retake %}
@@ -151,10 +146,17 @@
                                 {% endif %}
                             </span>
                         </div>
+                        {% if question.question_type != 'text' or quiz_attempt.status == 'graded' %}
                         <div class="badge bg-primary p-2">
                             <i class="bi bi-star-fill me-1"></i>
                             Points: {{ ans.points_earned }} / {{ question.points }}
                         </div>
+                        {% else %}
+                        <div class="badge bg-warning p-2">
+                            <i class="bi bi-hourglass-split me-1"></i>
+                            Pending Grading
+                        </div>
+                        {% endif %}
                     </div>
                     <div class="card-body">
                         <div class="question-text mb-4 p-3 bg-light rounded">
@@ -163,11 +165,15 @@
                         
                         <div class="row mb-4">
                             <div class="col-md-6">
-                                <div class="p-3 rounded border {% if ans.is_correct %}border-success{% else %}border-danger{% endif %}">
+                                <div class="p-3 rounded border {% if ans.is_correct %}border-success{% elif quiz_attempt.status == 'submitted' and question.question_type == 'text' %}border-warning{% else %}border-danger{% endif %}">
                                     <h6 class="d-flex align-items-center mb-3">
                                         <i class="bi bi-person-fill me-2"></i>
                                         Your Answer:
-                                        {% if ans.is_correct %}
+                                        {% if quiz_attempt.status == 'submitted' and question.question_type == 'text' %}
+                                            <span class="badge bg-warning ms-auto">
+                                                <i class="bi bi-hourglass-split me-1"></i>Pending Evaluation
+                                            </span>
+                                        {% elif ans.is_correct %}
                                             <span class="badge bg-success ms-auto">Correct</span>
                                         {% else %}
                                             <span class="badge bg-danger ms-auto">Incorrect</span>
@@ -187,9 +193,22 @@
                                                 </div>
                                             {% endfor %}
                                         {% elif question.question_type == 'text' %}
-                                            <div class="choice-item {% if ans.is_correct %}choice-correct{% else %}choice-incorrect{% endif %}">
+                                            <div class="choice-item {% if ans.is_correct %}choice-correct{% elif quiz_attempt.status == 'submitted' %}bg-warning-subtle{% else %}choice-incorrect{% endif %}">
+                                                {% if quiz_attempt.status == 'submitted' %}
+                                                    <i class="bi bi-hourglass-split text-warning me-2"></i>
+                                                {% elif ans.is_correct %}
+                                                    <i class="bi bi-check-circle-fill text-success me-2"></i>
+                                                {% else %}
+                                                    <i class="bi bi-x-circle-fill text-danger me-2"></i>
+                                                {% endif %}
                                                 "{{ ans.text_answer|default:"No answer provided" }}"
                                             </div>
+                                            {% if quiz_attempt.status == 'submitted' %}
+                                                <div class="alert alert-warning mt-2 mb-0">
+                                                    <i class="bi bi-info-circle-fill me-2"></i>
+                                                    <small>This answer is awaiting instructor evaluation. Marks will be assigned after grading.</small>
+                                                </div>
+                                            {% endif %}
                                         {% elif question.question_type == 'true_false' %}
                                             <div class="choice-item {% if ans.is_correct %}choice-correct{% else %}choice-incorrect{% endif %}">
                                                 <i class="bi {% if ans.boolean_answer %}bi-check-square{% else %}bi-x-square{% endif %}"></i>
@@ -199,6 +218,7 @@
                                     </div>
                                 </div>
                             </div>
+                            {% if question.question_type != 'text' or quiz_attempt.status == 'graded' %}
                             <div class="col-md-6">
                                 <div class="p-3 rounded border border-success">
                                     <h6 class="d-flex align-items-center mb-3">
@@ -216,18 +236,58 @@
                                                 {% endif %}
                                             {% endfor %}
                                         {% elif question.question_type == 'text' %}
-                                            <div class="choice-item choice-correct">
-                                                "{{ question.correct_answer }}"
-                                            </div>
+                                            {% if ans.is_correct %}
+                                                <div class="choice-item choice-correct">
+                                                    <i class="bi bi-check-circle-fill text-success"></i>
+                                                    "{{ ans.text_answer }}"
+                                                </div>
+                                                <div class="alert alert-success mt-2 mb-0">
+                                                    <i class="bi bi-check-circle-fill me-2"></i>
+                                                    <small>Your answer was marked correct by the instructor.</small>
+                                                </div>
+                                            {% elif ans.points_earned > 0 %}
+                                                <div class="choice-item bg-success-subtle">
+                                                    <i class="bi bi-check-circle text-success me-2"></i>
+                                                    "{{ ans.text_answer }}"
+                                                </div>
+                                                <div class="alert alert-success mt-2 mb-0">
+                                                    <i class="bi bi-check-circle-fill me-2"></i>
+                                                    <small>Partially correct - {{ ans.points_earned }} out of {{ question.points }} points awarded.</small>
+                                                </div>
+                                            {% else %}
+                                                <div class="alert alert-info mb-0">
+                                                    <i class="bi bi-info-circle-fill me-2"></i>
+                                                    <small>Text-based answer - evaluated by instructor.</small>
+                                                </div>
+                                            {% endif %}
                                         {% elif question.question_type == 'true_false' %}
-                                            <div class="choice-item choice-correct">
-                                                <i class="bi {% if question.correct_answer %}bi-check-square{% else %}bi-x-square{% endif %}"></i>
-                                                {{ question.correct_answer|yesno:"True,False" }}
-                                            </div>
+                                            {% for choice in question.choices.all %}
+                                                {% if choice.is_correct %}
+                                                    <div class="choice-item choice-correct">
+                                                        <i class="bi {% if choice.text|lower == 'true' %}bi-check-square{% else %}bi-x-square{% endif %}"></i>
+                                                        {{ choice.text }}
+                                                    </div>
+                                                {% endif %}
+                                            {% endfor %}
                                         {% endif %}
                                     </div>
                                 </div>
                             </div>
+                            {% else %}
+                            <div class="col-md-6">
+                                <div class="p-3 rounded border border-warning bg-warning-subtle">
+                                    <h6 class="d-flex align-items-center mb-3">
+                                        <i class="bi bi-hourglass-split me-2 text-warning"></i>
+                                        Correct Answer:
+                                    </h6>
+                                    <div class="alert alert-warning mb-0">
+                                        <i class="bi bi-lock-fill me-2"></i>
+                                        <strong>Hidden Until Graded</strong>
+                                        <p class="mb-0 mt-2 small">The correct answer and your grade will be revealed after the instructor evaluates your response.</p>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endif %}
                         </div>
                         
                         {% if question.explanation %}
@@ -240,16 +300,6 @@
                             </div>
                         {% endif %}
                         
-                        {% if ans.feedback %}
-                        <div class="mt-4 d-flex justify-content-end align-items-center">
-                            <div class="text-secondary">
-                                <small>
-                                    <i class="bi bi-chat-left-text-fill me-1"></i>
-                                    Instructor feedback: {{ ans.feedback }}
-                                </small>
-                            </div>
-                        </div>
-                        {% endif %}
                     </div>
                 </div>
                         {% endwith %}
@@ -340,7 +390,7 @@
                 <tr>
                     <th>Your Score:</th>
                     <td>
-                        {{ quiz_attempt.score }} out of {{ total_points }} ({% widthratio quiz_attempt.score total_points 100 %}%)
+                        {{ quiz_attempt.score }} out of {{ quiz_attempt.total_points }} ({{ quiz_attempt.percentage|floatformat:1 }}%)
                     </td>
                 </tr>
             </tbody>

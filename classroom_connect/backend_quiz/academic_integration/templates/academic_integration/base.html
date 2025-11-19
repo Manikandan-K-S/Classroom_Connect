@@ -77,7 +77,6 @@
 </head>
 <body>
 <div class="app-container">
-    {% if '/academic_integration/quiz/' not in request.path %}
     <nav class="navbar navbar-expand-lg navbar-dark {% if staff_email %}bg-primary{% elif student_roll_number %}bg-success{% else %}bg-dark{% endif %}">
         <div class="container-fluid">
             <a class="navbar-brand" href="{% if staff_email %}{% url 'academic_integration:staff_dashboard' %}{% elif student_roll_number %}{% url 'academic_integration:student_dashboard' %}{% else %}{% url 'academic_integration:home' %}{% endif %}">
@@ -158,7 +157,6 @@
             </div>
         </div>
     </nav>
-    {% endif %}
 
     <main class="app-content">
         <div class="container">

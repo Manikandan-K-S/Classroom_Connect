@@ -28,18 +28,23 @@
                         </button>
                     </li>
                     <li class="nav-item" role="presentation">
-                        <button class="nav-link" id="add-student-tab" data-bs-toggle="tab" data-bs-target="#add-student" type="button" role="tab">
-                            <i class="bi bi-person-plus"></i> Add Student
+                        <button class="nav-link" id="add-students-tab" data-bs-toggle="tab" data-bs-target="#add-students" type="button" role="tab">
+                            <i class="bi bi-person-plus-fill"></i> Add Students
                         </button>
                     </li>
                     <li class="nav-item" role="presentation">
-                        <button class="nav-link" id="add-batch-tab" data-bs-toggle="tab" data-bs-target="#add-batch" type="button" role="tab">
-                            <i class="bi bi-people-fill"></i> Add Batch
+                        <button class="nav-link" id="bulk-marks-tab" data-bs-toggle="tab" data-bs-target="#bulk-marks" type="button" role="tab">
+                            <i class="bi bi-upload"></i> Bulk Upload Marks
                         </button>
                     </li>
                     <li class="nav-item" role="presentation">
-                        <button class="nav-link" id="import-csv-tab" data-bs-toggle="tab" data-bs-target="#import-csv" type="button" role="tab">
-                            <i class="bi bi-file-earmark-spreadsheet"></i> Import CSV
+                        <button class="nav-link" id="direct-entry-tab" data-bs-toggle="tab" data-bs-target="#direct-entry" type="button" role="tab">
+                            <i class="bi bi-table"></i> Direct Mark Entry
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="archive-tab" data-bs-toggle="tab" data-bs-target="#archive" type="button" role="tab">
+                            <i class="bi bi-archive"></i> Archive Course
                         </button>
                     </li>
                 </ul>
@@ -67,9 +72,16 @@
                                             <td>{{ student.batch }}</td>
                                             <td>{{ student.email }}</td>
                                             <td>
-                                                <a href="{% url 'academic_integration:edit_student_marks' %}?course_id={{ course.id }}&student_id={{ student.rollno }}" class="btn btn-sm btn-outline-primary">
+                                                <a href="{% url 'academic_integration:edit_student_marks' %}?course_id={{ course.id }}&student_id={{ student.rollno }}" class="btn btn-sm btn-outline-primary me-1">
                                                     <i class="bi bi-pencil"></i> Edit Marks
                                                 </a>
+                                                <form method="post" action="{% url 'academic_integration:remove_student_from_course' course_id=course.id %}" style="display: inline;" onsubmit="return confirm('Are you sure you want to remove {{ student.name }} ({{ student.rollno }}) from this course? This will also delete their performance records.');">
+                                                    {% csrf_token %}
+                                                    <input type="hidden" name="student_rollno" value="{{ student.rollno }}">
+                                                    <button type="submit" class="btn btn-sm btn-outline-danger">
+                                                        <i class="bi bi-trash"></i> Remove
+                                                    </button>
+                                                </form>
                                             </td>
                                         </tr>
                                         {% endfor %}
@@ -407,109 +419,569 @@
                         {% endif %}
                     </div>
                     
-                    <!-- Add Student Tab -->
-                    <div class="tab-pane fade" id="add-student" role="tabpanel">
-                        <form method="post">
-                            {% csrf_token %}
-                            <input type="hidden" name="form_type" value="single">
-                            
-                            {% if single_student_form.non_field_errors %}
-                            <div class="alert alert-danger">
-                                {% for error in single_student_form.non_field_errors %}
-                                {{ error }}
-                                {% endfor %}
-                            </div>
-                            {% endif %}
-                            
-                            <div class="mb-3">
-                                <label for="{{ single_student_form.rollno.id_for_label }}" class="form-label">{{ single_student_form.rollno.label }}</label>
-                                {{ single_student_form.rollno }}
-                                {% if single_student_form.rollno.errors %}
-                                <div class="text-danger">
-                                    {% for error in single_student_form.rollno.errors %}
-                                    {{ error }}
-                                    {% endfor %}
+                    <!-- Add Students Tab (Combined) -->
+                    <div class="tab-pane fade" id="add-students" role="tabpanel">
+                        <div class="row">
+                            <!-- Add Single Student -->
+                            <div class="col-lg-4 mb-4">
+                                <div class="card h-100">
+                                    <div class="card-header bg-primary text-white">
+                                        <h5 class="mb-0"><i class="bi bi-person-plus"></i> Add Single Student</h5>
+                                    </div>
+                                    <div class="card-body">
+                                        <form method="post">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="form_type" value="single">
+                                            
+                                            {% if single_student_form.non_field_errors %}
+                                            <div class="alert alert-danger">
+                                                {% for error in single_student_form.non_field_errors %}
+                                                {{ error }}
+                                                {% endfor %}
+                                            </div>
+                                            {% endif %}
+                                            
+                                            <div class="mb-3">
+                                                <label for="{{ single_student_form.rollno.id_for_label }}" class="form-label">{{ single_student_form.rollno.label }}</label>
+                                                {{ single_student_form.rollno }}
+                                                <div class="form-text">Enter the student's roll number</div>
+                                                {% if single_student_form.rollno.errors %}
+                                                <div class="text-danger">
+                                                    {% for error in single_student_form.rollno.errors %}
+                                                    {{ error }}
+                                                    {% endfor %}
+                                                </div>
+                                                {% endif %}
+                                            </div>
+                                            
+                                            <div class="d-grid">
+                                                <button type="submit" class="btn btn-primary">
+                                                    <i class="bi bi-plus-circle"></i> Add Student
+                                                </button>
+                                            </div>
+                                        </form>
+                                    </div>
                                 </div>
-                                {% endif %}
                             </div>
                             
-                            <div class="d-grid">
-                                <button type="submit" class="btn btn-primary"><i class="bi bi-plus-circle"></i> Add Student</button>
+                            <!-- Add Batch -->
+                            <div class="col-lg-4 mb-4">
+                                <div class="card h-100">
+                                    <div class="card-header bg-success text-white">
+                                        <h5 class="mb-0"><i class="bi bi-people-fill"></i> Add Batch</h5>
+                                    </div>
+                                    <div class="card-body">
+                                        <form method="post">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="form_type" value="batch">
+                                            
+                                            {% if batch_form.non_field_errors %}
+                                            <div class="alert alert-danger">
+                                                {% for error in batch_form.non_field_errors %}
+                                                {{ error }}
+                                                {% endfor %}
+                                            </div>
+                                            {% endif %}
+                                            
+                                            <div class="mb-3">
+                                                <label for="{{ batch_form.batch.id_for_label }}" class="form-label">{{ batch_form.batch.label }}</label>
+                                                {{ batch_form.batch }}
+                                                <div class="form-text">Add all students from a specific batch to this course</div>
+                                                {% if batch_form.batch.errors %}
+                                                <div class="text-danger">
+                                                    {% for error in batch_form.batch.errors %}
+                                                    {{ error }}
+                                                    {% endfor %}
+                                                </div>
+                                                {% endif %}
+                                            </div>
+                                            
+                                            <div class="d-grid">
+                                                <button type="submit" class="btn btn-success">
+                                                    <i class="bi bi-people-fill"></i> Add Batch
+                                                </button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                </div>
                             </div>
-                        </form>
+                            
+                            <!-- Import CSV -->
+                            <div class="col-lg-4 mb-4">
+                                <div class="card h-100">
+                                    <div class="card-header bg-info text-white">
+                                        <h5 class="mb-0"><i class="bi bi-file-earmark-spreadsheet"></i> Import CSV</h5>
+                                    </div>
+                                    <div class="card-body">
+                                        <form method="post" enctype="multipart/form-data">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="form_type" value="csv">
+                                            
+                                            {% if csv_form.non_field_errors %}
+                                            <div class="alert alert-danger">
+                                                {% for error in csv_form.non_field_errors %}
+                                                {{ error }}
+                                                {% endfor %}
+                                            </div>
+                                            {% endif %}
+                                            
+                                            <div class="mb-3">
+                                                <label for="{{ csv_form.csv_file.id_for_label }}" class="form-label">{{ csv_form.csv_file.label }}</label>
+                                                <input type="file" class="form-control" id="{{ csv_form.csv_file.id_for_label }}" name="csv_file" accept=".csv,.xlsx,.xls" required>
+                                                <div class="form-text">Upload CSV or Excel file with roll numbers</div>
+                                                {% if csv_form.csv_file.errors %}
+                                                <div class="text-danger">
+                                                    {% for error in csv_form.csv_file.errors %}
+                                                    {{ error }}
+                                                    {% endfor %}
+                                                </div>
+                                                {% endif %}
+                                            </div>
+                                            
+                                            <div class="alert alert-light border mb-3">
+                                                <small>
+                                                    <strong>Format:</strong> One roll number per line<br>
+                                                    <code>{{ csv_template }}</code>
+                                                </small>
+                                            </div>
+                                            
+                                            <div class="d-grid">
+                                                <button type="submit" class="btn btn-info text-white">
+                                                    <i class="bi bi-upload"></i> Upload Students
+                                                </button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                     
-                    <!-- Add Batch Tab -->
-                    <div class="tab-pane fade" id="add-batch" role="tabpanel">
-                        <form method="post">
-                            {% csrf_token %}
-                            <input type="hidden" name="form_type" value="batch">
-                            
-                            {% if batch_form.non_field_errors %}
-                            <div class="alert alert-danger">
-                                {% for error in batch_form.non_field_errors %}
-                                {{ error }}
-                                {% endfor %}
+                    <!-- Bulk Upload Marks Tab -->
+                    <div class="tab-pane fade" id="bulk-marks" role="tabpanel">
+                        <div class="card mb-4">
+                            <div class="card-header bg-light">
+                                <h5 class="mb-0"><i class="bi bi-download"></i> Step 1: Download Template</h5>
                             </div>
-                            {% endif %}
-                            
-                            <div class="mb-3">
-                                <label for="{{ batch_form.batch.id_for_label }}" class="form-label">{{ batch_form.batch.label }}</label>
-                                {{ batch_form.batch }}
-                                <div class="form-text">This will add all students from the specified batch to this course.</div>
-                                {% if batch_form.batch.errors %}
-                                <div class="text-danger">
-                                    {% for error in batch_form.batch.errors %}
-                                    {{ error }}
-                                    {% endfor %}
-                                </div>
-                                {% endif %}
+                            <div class="card-body">
+                                <p>Select which mark columns you want to include in the template:</p>
+                                
+                                <form method="get" action="{% url 'academic_integration:download_marks_template' course.courseId %}">
+                                    <div class="row mb-3">
+                                        <div class="col-md-6">
+                                            <h6 class="fw-bold mb-2">Tutorials</h6>
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" name="include_tutorial1" id="include_tutorial1">
+                                                <label class="form-check-label" for="include_tutorial1">Tutorial 1</label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" name="include_tutorial2" id="include_tutorial2">
+                                                <label class="form-check-label" for="include_tutorial2">Tutorial 2</label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" name="include_tutorial3" id="include_tutorial3">
+                                                <label class="form-check-label" for="include_tutorial3">Tutorial 3</label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" name="include_tutorial4" id="include_tutorial4">
+                                                <label class="form-check-label" for="include_tutorial4">Tutorial 4</label>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="col-md-6">
+                                            <h6 class="fw-bold mb-2">Assessments</h6>
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" name="include_ca1" id="include_ca1">
+                                                <label class="form-check-label" for="include_ca1">CA 1</label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" name="include_ca2" id="include_ca2">
+                                                <label class="form-check-label" for="include_ca2">CA 2</label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" name="include_assignment" id="include_assignment">
+                                                <label class="form-check-label" for="include_assignment">Assignment/Presentation</label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="alert alert-info">
+                                        <i class="bi bi-info-circle"></i> <strong>Template will include:</strong>
+                                        <ul class="mb-0 mt-2">
+                                            <li>Roll Number (required - student identifier)</li>
+                                            <li>Name (read-only - for reference)</li>
+                                            <li>Selected mark columns (editable)</li>
+                                        </ul>
+                                        <small>Leave cells blank for marks you don't want to update. Only filled cells will be updated.</small>
+                                    </div>
+                                    
+                                    <div class="d-grid">
+                                        <button type="submit" class="btn btn-success">
+                                            <i class="bi bi-download"></i> Download Selected Template
+                                        </button>
+                                    </div>
+                                </form>
                             </div>
-                            
-                            <div class="d-grid">
-                                <button type="submit" class="btn btn-primary"><i class="bi bi-people-fill"></i> Add Batch</button>
-                            </div>
-                        </form>
-                    </div>
-                    
-                    <!-- Import CSV Tab -->
-                    <div class="tab-pane fade" id="import-csv" role="tabpanel">
-                        <div class="alert alert-info mb-3">
-                            <h5><i class="bi bi-info-circle"></i> CSV Format Instructions</h5>
-                            <p>Your CSV file should have one student roll number per line:</p>
-                            <pre>{{ csv_template }}</pre>
                         </div>
                         
-                        <form method="post" enctype="multipart/form-data">
-                            {% csrf_token %}
-                            <input type="hidden" name="form_type" value="csv">
-                            
-                            {% if csv_form.non_field_errors %}
-                            <div class="alert alert-danger">
-                                {% for error in csv_form.non_field_errors %}
-                                {{ error }}
-                                {% endfor %}
+                        <div class="card">
+                            <div class="card-header bg-light">
+                                <h5 class="mb-0"><i class="bi bi-upload"></i> Step 2: Upload Completed Template</h5>
                             </div>
-                            {% endif %}
-                            
-                            <div class="mb-3">
-                                <label for="{{ csv_form.csv_file.id_for_label }}" class="form-label">{{ csv_form.csv_file.label }}</label>
-                                {{ csv_form.csv_file }}
-                                {% if csv_form.csv_file.errors %}
-                                <div class="text-danger">
-                                    {% for error in csv_form.csv_file.errors %}
-                                    {{ error }}
-                                    {% endfor %}
+                            <div class="card-body">
+                                <form method="post" enctype="multipart/form-data">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="form_type" value="bulk_marks">
+                                    
+                                    {% if bulk_marks_errors %}
+                                    <div class="alert alert-danger">
+                                        <h6>Upload Errors:</h6>
+                                        <ul class="mb-0">
+                                            {% for error in bulk_marks_errors %}
+                                            <li>{{ error }}</li>
+                                            {% endfor %}
+                                        </ul>
+                                    </div>
+                                    {% endif %}
+                                    
+                                    {% if bulk_marks_success %}
+                                    <div class="alert alert-success">
+                                        <i class="bi bi-check-circle"></i> {{ bulk_marks_success }}
+                                    </div>
+                                    {% endif %}
+                                    
+                                    <div class="mb-3">
+                                        <label for="marks_csv_file" class="form-label">Select File (CSV or Excel)</label>
+                                        <input type="file" class="form-control" id="marks_csv_file" name="marks_csv_file" accept=".csv,.xlsx,.xls" required>
+                                        <div class="form-text">Upload CSV or Excel file with student marks. The system will automatically detect column headers.</div>
+                                    </div>
+                                    
+                                    <div class="alert alert-warning">
+                                        <i class="bi bi-exclamation-triangle"></i> <strong>Important:</strong>
+                                        <ul class="mb-0 mt-2">
+                                            <li>Only fill in the marks columns you want to update</li>
+                                            <li>Do not modify Roll Number or Name columns</li>
+                                            <li>Marks should be numeric values (0-10)</li>
+                                            <li>The system will match column names like: tutorial1, Tutorial 1, CA1, CA 1, assignment, etc.</li>
+                                            <li><strong>Supported formats:</strong> CSV (.csv) or Excel (.xlsx, .xls)</li>
+                                        </ul>
+                                    </div>
+                                    
+                                    <div class="d-grid">
+                                        <button type="submit" class="btn btn-primary btn-lg">
+                                            <i class="bi bi-upload"></i> Upload and Update Marks
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Direct Mark Entry Tab -->
+                    <div class="tab-pane fade" id="direct-entry" role="tabpanel">
+                        <div class="card">
+                            <div class="card-header bg-light">
+                                <h5 class="mb-0"><i class="bi bi-table"></i> Direct Mark Entry</h5>
+                            </div>
+                            <div class="card-body">
+                                {% if students %}
+                                <form method="post" id="direct-marks-form">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="form_type" value="direct_marks">
+                                    
+                                    {% if direct_marks_errors %}
+                                    <div class="alert alert-danger">
+                                        <h6>Errors:</h6>
+                                        <ul class="mb-0">
+                                            {% for error in direct_marks_errors %}
+                                            <li>{{ error }}</li>
+                                            {% endfor %}
+                                        </ul>
+                                    </div>
+                                    {% endif %}
+                                    
+                                    {% if direct_marks_success %}
+                                    <div class="alert alert-success">
+                                        <i class="bi bi-check-circle"></i> {{ direct_marks_success }}
+                                    </div>
+                                    {% endif %}
+                                    
+                                    <div class="row mb-3">
+                                        <div class="col-md-4">
+                                            <label for="mark_component" class="form-label fw-bold">Select Mark Component *</label>
+                                            <select class="form-select" id="mark_component" name="mark_component" required onchange="updateTotalMarks()">
+                                                <option value="">-- Select Component --</option>
+                                                <option value="tutorial1">Tutorial 1</option>
+                                                <option value="tutorial2">Tutorial 2</option>
+                                                <option value="tutorial3">Tutorial 3</option>
+                                                <option value="tutorial4">Tutorial 4</option>
+                                                <option value="ca1">CA 1 (50 marks)</option>
+                                                <option value="ca2">CA 2 (50 marks)</option>
+                                                <option value="assignment">Assignment/Presentation (15 marks)</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label for="total_marks" class="form-label fw-bold">Total Marks (Test Out Of) *</label>
+                                            <input type="number" class="form-control" id="total_marks" name="total_marks" 
+                                                   min="1" max="100" step="0.01" value="10" required
+                                                   onchange="updateMarkInputs()">
+                                            <small class="form-text text-muted" id="total_marks_info">Marks will be converted to equivalent out of 10</small>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label class="form-label fw-bold">Quick Actions</label>
+                                            <div>
+                                                <button type="button" class="btn btn-sm btn-outline-secondary me-1" onclick="clearAllMarks()">
+                                                    <i class="bi bi-x-circle"></i> Clear All
+                                                </button>
+                                                <button type="button" class="btn btn-sm btn-outline-info" onclick="fillAbsent()">
+                                                    <i class="bi bi-dash-circle"></i> Mark Absent (0)
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="alert alert-info">
+                                        <i class="bi bi-info-circle"></i> 
+                                        Enter marks in actual test scores. They will be automatically converted to equivalent marks out of 10.
+                                        <strong id="conversion-info">Example: If test is out of 25, entering 20 = 8.0/10</strong>
+                                    </div>
+                                    
+                                    <div class="table-responsive">
+                                        <table class="table table-bordered table-hover">
+                                            <thead class="table-light">
+                                                <tr>
+                                                    <th style="width: 5%">#</th>
+                                                    <th style="width: 15%">Roll Number</th>
+                                                    <th style="width: 40%">Name</th>
+                                                    <th style="width: 20%">Mark <span id="marks-range">(0-10)</span></th>
+                                                    <th style="width: 20%">Equivalent /10</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="marks-table-body">
+                                                {% for student in sorted_students %}
+                                                <tr>
+                                                    <td class="text-center">{{ forloop.counter }}</td>
+                                                    <td><strong>{{ student.rollno }}</strong></td>
+                                                    <td>{{ student.name }}</td>
+                                                    <td>
+                                                        <input type="hidden" name="student_rollno_{{ forloop.counter }}" value="{{ student.rollno }}">
+                                                        <input type="hidden" name="student_email_{{ forloop.counter }}" value="{{ student.email }}">
+                                                        <input type="number" 
+                                                               class="form-control form-control-sm mark-input" 
+                                                               id="mark_input_{{ forloop.counter }}"
+                                                               name="mark_{{ forloop.counter }}" 
+                                                               min="0" 
+                                                               max="10" 
+                                                               step="0.01"
+                                                               oninput="calculateEquivalent({{ forloop.counter }})"
+                                                               placeholder="0-10">
+                                                    </td>
+                                                    <td>
+                                                        <span class="badge bg-secondary equivalent-mark" id="equiv_{{ forloop.counter }}">-</span>
+                                                    </td>
+                                                </tr>
+                                                {% endfor %}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    
+                                    <div class="d-grid gap-2 mt-3">
+                                        <button type="submit" class="btn btn-primary btn-lg">
+                                            <i class="bi bi-save"></i> Save Marks
+                                        </button>
+                                    </div>
+                                </form>
+                                {% else %}
+                                <div class="alert alert-info">
+                                    <i class="bi bi-info-circle"></i> No students enrolled in this course yet.
                                 </div>
                                 {% endif %}
                             </div>
-                            
-                            <div class="d-grid">
-                                <button type="submit" class="btn btn-primary"><i class="bi bi-upload"></i> Upload and Process CSV</button>
-                            </div>
-                        </form>
+                        </div>
                     </div>
                 </div>
+                
+                <!-- Archive Course Tab -->
+                <div class="tab-pane fade" id="archive" role="tabpanel">
+                    <div class="card">
+                        <div class="card-header bg-warning text-dark">
+                            <h5 class="mb-0"><i class="bi bi-archive"></i> Archive Course</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="alert alert-warning">
+                                <h5 class="alert-heading"><i class="bi bi-exclamation-triangle"></i> Archive Course</h5>
+                                <p>Archiving a course will:</p>
+                                <ul>
+                                    <li>Remove it from your active courses dashboard</li>
+                                    <li>Hide it from quiz creation course selection</li>
+                                    <li>Preserve all student enrollment and marks data</li>
+                                    <li>Make it read-only (no mark modifications allowed)</li>
+                                    <li>Allow you to restore it later if needed</li>
+                                </ul>
+                                <hr>
+                                <p class="mb-0"><strong>Note:</strong> Archived courses can be viewed from the "Archived Courses" section in the dashboard.</p>
+                            </div>
+                            
+                            <div class="card border-danger">
+                                <div class="card-header bg-danger text-white">
+                                    <strong>Confirm Archive</strong>
+                                </div>
+                                <div class="card-body">
+                                    <p>Course: <strong>{{ course.name }} ({{ course.id }})</strong></p>
+                                    <p>Enrolled Students: <strong>{{ students|length }}</strong></p>
+                                    
+                                    <form method="post" action="{% url 'academic_integration:archive_course' course_id=course.id %}" 
+                                          onsubmit="return confirm('Are you sure you want to archive this course? This action will remove it from your active courses.');">
+                                        {% csrf_token %}
+                                        <button type="submit" class="btn btn-danger">
+                                            <i class="bi bi-archive"></i> Archive This Course
+                                        </button>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <script>
+                    // Update total marks based on component selection
+                    function updateTotalMarks() {
+                        const component = document.getElementById('mark_component').value;
+                        const totalMarksInput = document.getElementById('total_marks');
+                        const totalMarksInfo = document.getElementById('total_marks_info');
+                        
+                        // Set total marks based on component
+                        if (component === 'ca1' || component === 'ca2') {
+                            totalMarksInput.value = 50;
+                            totalMarksInput.disabled = true;
+                            totalMarksInfo.textContent = 'Fixed at 50 marks (converted to /10)';
+                            totalMarksInfo.className = 'form-text text-info fw-bold';
+                        } else if (component === 'assignment') {
+                            totalMarksInput.value = 15;
+                            totalMarksInput.disabled = true;
+                            totalMarksInfo.textContent = 'Fixed at 15 marks (converted to /10)';
+                            totalMarksInfo.className = 'form-text text-info fw-bold';
+                        } else if (component.startsWith('tutorial')) {
+                            totalMarksInput.value = 10;
+                            totalMarksInput.disabled = false;
+                            totalMarksInfo.textContent = 'Enter the total marks for this tutorial';
+                            totalMarksInfo.className = 'form-text text-muted';
+                        } else {
+                            totalMarksInput.value = 10;
+                            totalMarksInput.disabled = false;
+                            totalMarksInfo.textContent = 'Marks will be converted to equivalent out of 10';
+                            totalMarksInfo.className = 'form-text text-muted';
+                        }
+                        
+                        // Update the mark inputs with new range
+                        updateMarkInputs();
+                    }
+                    
+                    // Calculate equivalent mark out of 10
+                    function calculateEquivalent(counter) {
+                        const totalMarks = parseFloat(document.getElementById('total_marks').value) || 10;
+                        const markInput = document.getElementById(`mark_input_${counter}`);
+                        const equivSpan = document.getElementById(`equiv_${counter}`);
+                        
+                        if (markInput.value) {
+                            const actualMark = parseFloat(markInput.value);
+                            const equivalent = (actualMark / totalMarks) * 10;
+                            equivSpan.textContent = equivalent.toFixed(2);
+                            equivSpan.className = 'badge bg-success';
+                        } else {
+                            equivSpan.textContent = '-';
+                            equivSpan.className = 'badge bg-secondary';
+                        }
+                    }
+                    
+                    // Update mark input ranges when total marks changes
+                    function updateMarkInputs() {
+                        const totalMarks = parseFloat(document.getElementById('total_marks').value) || 10;
+                        const marksRange = document.getElementById('marks-range');
+                        const conversionInfo = document.getElementById('conversion-info');
+                        
+                        marksRange.textContent = `(0-${totalMarks})`;
+                        
+                        // Update example conversion
+                        const exampleMark = Math.round(totalMarks * 0.8 * 100) / 100;
+                        const exampleEquiv = ((exampleMark / totalMarks) * 10).toFixed(1);
+                        conversionInfo.innerHTML = `<strong>Example: If test is out of ${totalMarks}, entering ${exampleMark} = ${exampleEquiv}/10</strong>`;
+                        
+                        // Update all input max values
+                        document.querySelectorAll('.mark-input').forEach(input => {
+                            input.max = totalMarks;
+                            // Recalculate equivalents for filled inputs
+                            const counter = input.id.replace('mark_input_', '');
+                            if (input.value) {
+                                calculateEquivalent(counter);
+                            }
+                        });
+                    }
+                    
+                    function clearAllMarks() {
+                        document.querySelectorAll('.mark-input').forEach(input => {
+                            input.value = '';
+                            const counter = input.id.replace('mark_input_', '');
+                            const equivSpan = document.getElementById(`equiv_${counter}`);
+                            if (equivSpan) {
+                                equivSpan.textContent = '-';
+                                equivSpan.className = 'badge bg-secondary';
+                            }
+                        });
+                    }
+                    
+                    function fillAbsent() {
+                        if (confirm('Mark all students as absent (0 marks)?')) {
+                            document.querySelectorAll('.mark-input').forEach(input => {
+                                input.value = '0';
+                                const counter = input.id.replace('mark_input_', '');
+                                calculateEquivalent(counter);
+                            });
+                        }
+                    }
+                    
+                    // Preserve active tab after page reload
+                    document.addEventListener('DOMContentLoaded', function() {
+                        // Initialize on page load
+                        updateMarkInputs();
+                        
+                        // Check if there's a hash in the URL or a saved tab
+                        const hash = window.location.hash || localStorage.getItem('activeTab');
+                        if (hash) {
+                            const tabTrigger = document.querySelector(`a[href="${hash}"]`);
+                            if (tabTrigger) {
+                                const tab = new bootstrap.Tab(tabTrigger);
+                                tab.show();
+                            }
+                        }
+                        
+                        // Save active tab when switching
+                        document.querySelectorAll('button[data-bs-toggle="tab"]').forEach(button => {
+                            button.addEventListener('shown.bs.tab', function (event) {
+                                const targetId = event.target.getAttribute('data-bs-target');
+                                localStorage.setItem('activeTab', targetId);
+                                window.location.hash = targetId;
+                            });
+                        });
+                        
+                        // Check for success/error messages to show appropriate tab
+                        {% if bulk_marks_errors or bulk_marks_success %}
+                        const bulkTab = document.querySelector('button[data-bs-target="#bulk-upload"]');
+                        if (bulkTab) {
+                            const tab = new bootstrap.Tab(bulkTab);
+                            tab.show();
+                        }
+                        {% endif %}
+                        
+                        {% if direct_marks_errors or direct_marks_success %}
+                        const directTab = document.querySelector('button[data-bs-target="#direct-entry"]');
+                        if (directTab) {
+                            const tab = new bootstrap.Tab(directTab);
+                            tab.show();
+                        }
+                        {% endif %}
+                    });
+                </script>
                 
                 <div class="mt-4">
                     <a href="{% url 'academic_integration:staff_dashboard' %}" class="btn btn-outline-secondary">

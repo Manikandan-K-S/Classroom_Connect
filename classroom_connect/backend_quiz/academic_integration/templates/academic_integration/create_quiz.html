@@ -354,14 +354,21 @@
                 <textarea class="form-control question-text" rows="2" required></textarea>
             </div>
             
-            <div class="mb-3">
-                <label class="form-label">Question Type *</label>
-                <select class="form-select question-type">
-                    <option value="mcq_single">Multiple Choice (Single Answer)</option>
-                    <option value="mcq_multiple">Multiple Choice (Multiple Answers)</option>
-                    <option value="true_false">True or False</option>
-                    <option value="text">Text Input</option>
-                </select>
+            <div class="row mb-3">
+                <div class="col-md-8">
+                    <label class="form-label">Question Type *</label>
+                    <select class="form-select question-type">
+                        <option value="mcq_single">Multiple Choice (Single Answer)</option>
+                        <option value="mcq_multiple">Multiple Choice (Multiple Answers)</option>
+                        <option value="true_false">True or False</option>
+                        <option value="text">Text Input</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Points *</label>
+                    <input type="number" class="form-control question-points" min="1" value="1" required>
+                    <small class="text-muted">Marks for this question</small>
+                </div>
             </div>
             
             <div class="choices-container">
@@ -887,10 +894,12 @@
         document.querySelectorAll('.question-card').forEach((questionCard, index) => {
             const questionType = questionCard.querySelector('.question-type').value;
             const questionText = questionCard.querySelector('.question-text').value;
+            const questionPoints = parseInt(questionCard.querySelector('.question-points').value) || 1;
             
             const questionData = {
                 text: questionText,
                 type: questionType,
+                points: questionPoints,
                 order: index,
                 choices: []
             };

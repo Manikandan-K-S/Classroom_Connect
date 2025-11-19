@@ -5,8 +5,10 @@ from django.urls import reverse
 from django.utils import timezone
 from django.db.models import Count, Avg, Sum, F, Q, Case, When, Value, IntegerField
 import logging
+import requests
 
 from quiz.models import Quiz, QuizAttempt, QuizAnswer, Question, Choice
+from .views import api_base_url, _safe_json
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +59,38 @@ def quiz_student_performance(request: HttpRequest, quiz_id: int) -> HttpResponse
     # Count attempts that need grading (status='submitted')
     needs_grading_count = attempts.filter(status='submitted').count()
     
+    # Get enrolled students who haven't taken the quiz
+    students_not_taken = []
+    total_enrolled = 0
+    
+    if quiz.course_id:
+        try:
+            # Get course roster from Academic Analyzer
+            course_response = requests.get(
+                f"{api_base_url()}/staff/course-detail",
+                params={"courseId": quiz.course_id},
+                timeout=5,
+            )
+            
+            if course_response.ok:
+                course_data = _safe_json(course_response)
+                if course_data.get("success"):
+                    enrolled_students = course_data.get("students", [])
+                    total_enrolled = len(enrolled_students)
+                    
+                    # Get list of students who have taken the quiz
+                    students_taken = set(attempt.user.username for attempt in attempts)
+                    
+                    # Filter students who haven't taken the quiz
+                    students_not_taken = [
+                        student for student in enrolled_students 
+                        if student.get('rollno') not in students_taken
+                    ]
+                    
+                    logger.info(f"Course {quiz.course_id}: {total_enrolled} enrolled, {len(students_taken)} took quiz, {len(students_not_taken)} didn't take")
+        except Exception as e:
+            logger.warning(f"Failed to get course roster: {str(e)}")
+    
     context = {
         'quiz': quiz,
         'attempts': attempts,
@@ -65,6 +99,9 @@ def quiz_student_performance(request: HttpRequest, quiz_id: int) -> HttpResponse
         'passing_rate': passing_rate,
         'passing_count': passing_count,
         'needs_grading_count': needs_grading_count,
+        'students_not_taken': students_not_taken,
+        'total_enrolled': total_enrolled,
+        'not_taken_count': len(students_not_taken),
         'staff_email': staff_email,
         'staff_name': request.session.get('staff_name', staff_email),
     }
@@ -99,12 +136,8 @@ def grade_quiz_attempt(request: HttpRequest, attempt_id: int) -> HttpResponse:
         messages.error(request, "You don't have permission to grade this quiz attempt.")
         return redirect("academic_integration:admin_quiz_dashboard")
     
-    # Get all answers for this attempt that need manual grading (primarily text questions)
-    answers_to_grade = attempt.answers.filter(question__question_type='text').order_by('question__order')
-    
-    # If no text questions but attempt status is 'submitted', include all answers for review
-    if not answers_to_grade.exists() and attempt.status == 'submitted':
-        answers_to_grade = attempt.answers.all().order_by('question__order')
+    # Get all answers for this attempt for review (show all answers regardless of grading status)
+    answers_to_grade = attempt.answers.all().order_by('question__order')
     
     # Process form submission
     if request.method == 'POST':
@@ -116,19 +149,15 @@ def grade_quiz_attempt(request: HttpRequest, attempt_id: int) -> HttpResponse:
             for answer in answers_to_grade:
                 # Get form data for this answer
                 points_key = f"points_{answer.id}"
-                feedback_key = f"feedback_{answer.id}"
-                correct_key = f"correct_{answer.id}"
                 
                 # Update answer with grading information
                 if points_key in request.POST:
                     points = min(int(request.POST.get(points_key, 0)), answer.question.points)
                     answer.points_earned = points
                 
-                if feedback_key in request.POST:
-                    answer.feedback = request.POST.get(feedback_key)
-                
-                # Update correctness flag
-                answer.is_correct = correct_key in request.POST
+                # Automatically determine correctness based on points awarded
+                # If points > 0, mark as correct; if 0 points, mark as incorrect
+                answer.is_correct = answer.points_earned > 0
                 
                 # Save the answer
                 answer.save()
@@ -175,46 +204,7 @@ def grade_quiz_attempt(request: HttpRequest, attempt_id: int) -> HttpResponse:
     return render(request, "academic_integration/grade_quiz_attempt.html", context)
 
 
-def update_attempt_feedback(request: HttpRequest, attempt_id: int) -> HttpResponse:
-    """
-    View for staff to update overall feedback for a quiz attempt.
-    """
-    # Ensure staff is logged in
-    staff_email = request.session.get('staff_email')
-    if not staff_email:
-        messages.info(request, "Please log in to continue.")
-        return redirect("academic_integration:staff_login")
-    
-    # Get the quiz attempt
-    attempt = get_object_or_404(QuizAttempt, pk=attempt_id)
-    quiz = attempt.quiz
-    
-    # Verify staff has access to this quiz
-    has_access = False
-    
-    # Check if staff created the quiz
-    if quiz.created_by and (quiz.created_by.email == staff_email or quiz.created_by.username == staff_email):
-        has_access = True
-    
-    # If access denied, redirect to dashboard
-    if not has_access:
-        messages.error(request, "You don't have permission to update feedback for this quiz attempt.")
-        return redirect("academic_integration:admin_quiz_dashboard")
-    
-    # Process form submission
-    if request.method == 'POST':
-        try:
-            # Update attempt feedback
-            attempt.feedback = request.POST.get('feedback', '')
-            attempt.save()
-            
-            messages.success(request, "Feedback updated successfully!")
-        except Exception as e:
-            logger.exception(f"Error updating feedback: {e}")
-            messages.error(request, f"An error occurred while updating feedback: {str(e)}")
-    
-    # Redirect back to grading page
-    return redirect('academic_integration:grade_quiz_attempt', attempt_id=attempt_id)
+# Removed update_attempt_feedback function - feedback feature disabled
 
 
 def quiz_answer_analysis(request: HttpRequest, quiz_id: int) -> HttpResponse:

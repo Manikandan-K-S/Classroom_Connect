@@ -1,0 +1,153 @@
+{% extends 'academic_integration/base.html' %}
+
+{% block title %}{{ course.courseName }} (Archived) - Classroom Connect{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header bg-secondary text-white">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h4 class="mb-0">
+                        <i class="bi bi-archive"></i> {{ course.courseName }} 
+                        <span class="badge bg-warning text-dark">ARCHIVED</span>
+                    </h4>
+                    <div>
+                        <form method="post" 
+                              action="{% url 'academic_integration:restore_course' archived_course_id=archived_course_id %}" 
+                              style="display: inline;"
+                              onsubmit="return confirm('Restore this course to active courses?');">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-success btn-sm me-2">
+                                <i class="bi bi-arrow-counterclockwise"></i> Restore Course
+                            </button>
+                        </form>
+                        <a href="{% url 'academic_integration:archived_courses' %}" class="btn btn-outline-light btn-sm">
+                            <i class="bi bi-arrow-left"></i> Back to Archived
+                        </a>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-warning">
+                    <i class="bi bi-info-circle"></i> <strong>This is an archived course.</strong> 
+                    All data is read-only. To modify marks or add students, restore the course first.
+                </div>
+                
+                <!-- Course Info -->
+                <div class="row mb-4">
+                    <div class="col-md-3">
+                        <div class="card bg-light">
+                            <div class="card-body">
+                                <p class="text-muted mb-1">Course Code</p>
+                                <h5>{{ course.courseCode }}</h5>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card bg-light">
+                            <div class="card-body">
+                                <p class="text-muted mb-1">Course ID</p>
+                                <h5><code>{{ course.courseId }}</code></h5>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card bg-light">
+                            <div class="card-body">
+                                <p class="text-muted mb-1">Batch</p>
+                                <h5>{{ course.batch }}</h5>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card bg-light">
+                            <div class="card-body">
+                                <p class="text-muted mb-1">Students</p>
+                                <h5><span class="badge bg-info">{{ course.students|length }}</span></h5>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="row mb-4">
+                    <div class="col-md-4">
+                        <p><strong>Teacher:</strong> {{ course.teacherName }}</p>
+                    </div>
+                    <div class="col-md-4">
+                        <p><strong>Archived Date:</strong> {{ course.archivedAt|date:"F d, Y H:i" }}</p>
+                    </div>
+                    <div class="col-md-4">
+                        <p><strong>Archived By:</strong> {{ course.archivedBy }}</p>
+                    </div>
+                </div>
+                
+                <hr>
+                
+                <!-- Students and Marks -->
+                <h5 class="mb-3"><i class="bi bi-people"></i> Students & Performance Data</h5>
+                
+                {% if course.students %}
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover table-sm">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Roll No</th>
+                                <th>Name</th>
+                                <th>Email</th>
+                                <th>Tut 1</th>
+                                <th>Tut 2</th>
+                                <th>Tut 3</th>
+                                <th>Tut 4</th>
+                                <th>CA 1</th>
+                                <th>CA 2</th>
+                                <th>Assignment</th>
+                                <th>Total</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for student in course.students %}
+                            <tr>
+                                <td>{{ forloop.counter }}</td>
+                                <td><strong>{{ student.rollno }}</strong></td>
+                                <td>{{ student.name }}</td>
+                                <td>{{ student.email }}</td>
+                                <td>{{ student.marks.tutorial1|default:"-" }}</td>
+                                <td>{{ student.marks.tutorial2|default:"-" }}</td>
+                                <td>{{ student.marks.tutorial3|default:"-" }}</td>
+                                <td>{{ student.marks.tutorial4|default:"-" }}</td>
+                                <td>{{ student.marks.CA1|default:"-" }}</td>
+                                <td>{{ student.marks.CA2|default:"-" }}</td>
+                                <td>{{ student.marks.assignmentPresentation|default:"-" }}</td>
+                                <td><strong>{{ student.totalMarks|floatformat:2 }}</strong></td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="alert alert-info">
+                    No students were enrolled in this course.
+                </div>
+                {% endif %}
+                
+                <div class="mt-4">
+                    <a href="{% url 'academic_integration:archived_courses' %}" class="btn btn-outline-secondary">
+                        <i class="bi bi-arrow-left"></i> Back to Archived Courses
+                    </a>
+                    <form method="post" 
+                          action="{% url 'academic_integration:restore_course' archived_course_id=archived_course_id %}" 
+                          style="display: inline;"
+                          onsubmit="return confirm('Restore this course to active courses?');">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-success">
+                            <i class="bi bi-arrow-counterclockwise"></i> Restore This Course
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

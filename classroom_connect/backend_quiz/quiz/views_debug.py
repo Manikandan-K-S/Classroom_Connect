@@ -42,7 +42,7 @@ def debug_quiz_availability(request, quiz_id):
     
     if quiz.start_date:
         if now < quiz.start_date:
-            availability_issues.append(f"Quiz start date ({quiz.start_date}) is in the future")
+            availability_issues.append("Quiz has not started yet")
         data["time_until_start"] = (quiz.start_date - now).total_seconds() if now < quiz.start_date else 0
         
     if quiz.complete_by_date:

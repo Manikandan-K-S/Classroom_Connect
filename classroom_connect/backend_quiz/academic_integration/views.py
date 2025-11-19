@@ -4,8 +4,9 @@ import json
 import requests
 from django.conf import settings
 from django.contrib import messages
+from django.contrib.auth.decorators import login_required, user_passes_test
 from django.db.models import Avg
-from django.http import HttpRequest, HttpResponse, JsonResponse
+from django.http import HttpRequest, HttpResponse, JsonResponse, HttpResponseBadRequest, HttpResponseForbidden
 from django.shortcuts import redirect, render, get_object_or_404
 from django.urls import reverse
 from django.utils import timezone
@@ -311,6 +312,7 @@ def create_quiz(request: HttpRequest) -> HttpResponse:
 					quiz=quiz,
 					text=question_data['text'],
 					question_type=question_data['type'],
+					points=question_data.get('points', 1),
 					order=question_data.get('order', 0)
 				)
 				if question_data['type'] in ['mcq_single', 'mcq_multiple', 'true_false']:
@@ -440,6 +442,7 @@ def edit_quiz(request: HttpRequest, quiz_id: int) -> HttpResponse:
 					quiz=quiz,
 					text=question_data['text'],
 					question_type=question_data['type'],
+					points=question_data.get('points', 1),
 					order=question_data.get('order', 0)
 				)
 				if question_data['type'] in ['mcq_single', 'mcq_multiple', 'true_false']:
@@ -965,128 +968,121 @@ def submit_quiz(request: HttpRequest, quiz_id: int) -> HttpResponse:
                     # Convert answer_value to int if possible
                     if isinstance(answer_value, str) and answer_value.lower() == 'undefined':
                         logger.warning(f"Received 'undefined' as choice ID for question {question.id}")
-                        # Try to find a correct choice first
-                        choice = question.choices.filter(is_correct=True).first()
-                        if not choice:
-                            # If no correct choice, use any choice
-                            choice = question.choices.first()
-                            
-                        if choice:
-                            answer.selected_choices.add(choice)
-                            logger.info(f"Using choice {choice.id} ({choice.text}) as fallback for undefined choice")
-                            
-                            if choice.is_correct:
-                                answer.points_earned = question.points
-                                answer.is_correct = True
-                                logger.info(f"Marked question {question.id} as correct with automatically selected choice")
+                        # Skip this question - no valid answer provided
+                        answer.is_correct = False
+                        answer.points_earned = 0
                     else:
                         try:
                             # Try to convert to int if it's a string representing a number
                             if isinstance(answer_value, str) and answer_value.isdigit():
                                 answer_value = int(answer_value)
-                        except (ValueError, TypeError):
-                            logger.warning(f"Failed to convert {answer_value} to int")
+                            elif isinstance(answer_value, str):
+                                logger.warning(f"Non-numeric string answer value: {answer_value}")
+                                answer.is_correct = False
+                                answer.points_earned = 0
+                                answer.save()
+                                total_points += question.points
+                                earned_points += answer.points_earned
+                                continue
+                        except (ValueError, TypeError) as e:
+                            logger.warning(f"Failed to convert {answer_value} to int: {str(e)}")
+                            answer.is_correct = False
+                            answer.points_earned = 0
+                            answer.save()
+                            total_points += question.points
+                            earned_points += answer.points_earned
+                            continue
                             
                         try:
                             choice = Choice.objects.get(id=answer_value, question=question)
                             answer.selected_choices.add(choice)
+                            logger.info(f"MCQ Single: Added choice {choice.id} ({choice.text}) for question {question.id}")
                             
                             if choice.is_correct:
                                 answer.points_earned = question.points
                                 answer.is_correct = True
-                        except Choice.DoesNotExist:
-                            # Invalid choice ID - try to find valid choices for this question
-                            logger.warning(f"Choice with ID {answer_value} does not exist for question {question.id}")
-                            valid_choices = Choice.objects.filter(question=question)
-                            if valid_choices.exists():
-                                logger.info(f"Found {valid_choices.count()} valid choices for question {question.id}")
-                                # Add the first valid choice as a fallback
-                                fallback_choice = valid_choices.first()
-                                answer.selected_choices.add(fallback_choice)
-                                logger.info(f"Using fallback choice: {fallback_choice.id} - {fallback_choice.text}")
-                                
-                                if fallback_choice.is_correct:
-                                    answer.points_earned = question.points
-                                    answer.is_correct = True
+                                logger.info(f"MCQ Single: Question {question.id} marked CORRECT - earned {question.points} points")
                             else:
-                                logger.error(f"No valid choices found for question {question.id}")
+                                answer.is_correct = False
+                                answer.points_earned = 0
+                                logger.info(f"MCQ Single: Question {question.id} marked INCORRECT - wrong choice selected")
+                        except Choice.DoesNotExist:
+                            # Invalid choice ID
+                            logger.error(f"Choice with ID {answer_value} does not exist for question {question.id}")
+                            answer.is_correct = False
+                            answer.points_earned = 0
                 except Exception as e:
-                    logger.error(f"Error processing single choice answer: {str(e)}")
+                    logger.error(f"Error processing single choice answer: {str(e)}", exc_info=True)
                     # Don't award points if there was an error
+                    answer.is_correct = False
+                    answer.points_earned = 0
                     
             elif question.question_type == 'mcq_multiple':
                 # Multiple choice question
                 if isinstance(answer_value, list):
-                    all_correct = True
-                    correct_choices = Choice.objects.filter(question=question, is_correct=True)
+                    correct_choice_ids = set(question.choices.filter(is_correct=True).values_list('id', flat=True))
+                    selected_choice_ids = set()
                     
-                    # Check that all selected choices are correct
+                    logger.info(f"MCQ Multiple: Question {question.id} has {len(correct_choice_ids)} correct choices")
+                    
+                    # Add all selected choices
                     for choice_id in answer_value:
                         try:
                             # Handle 'undefined' choice IDs
                             if isinstance(choice_id, str) and choice_id.lower() == 'undefined':
                                 logger.warning(f"Received 'undefined' as choice ID for multiple choice question {question.id}")
-                                # Try to add a correct choice as a fallback
-                                correct_choices_list = list(Choice.objects.filter(question=question, is_correct=True))
-                                if correct_choices_list:
-                                    fallback_choice = correct_choices_list[0]
-                                    logger.info(f"Using correct choice as fallback for undefined: {fallback_choice.id} - {fallback_choice.text}")
-                                    answer.selected_choices.add(fallback_choice)
-                                else:
-                                    # If no correct choices, just use any available choice
-                                    any_choice = Choice.objects.filter(question=question).first()
-                                    if any_choice:
-                                        logger.info(f"Using any choice as fallback for undefined: {any_choice.id} - {any_choice.text}")
-                                        answer.selected_choices.add(any_choice)
-                                        all_correct = False
-                                    else:
-                                        logger.warning(f"No choices available for question {question.id}")
-                                        all_correct = False
                                 continue
                                 
                             # Try to convert string to int if needed
                             if isinstance(choice_id, str) and choice_id.isdigit():
                                 choice_id = int(choice_id)
+                            elif isinstance(choice_id, str):
+                                logger.warning(f"Non-numeric string choice ID: {choice_id}")
+                                continue
                                 
                             try:
                                 choice = Choice.objects.get(id=choice_id, question=question)
                                 answer.selected_choices.add(choice)
-                                if not choice.is_correct:
-                                    all_correct = False
+                                selected_choice_ids.add(choice.id)
+                                logger.info(f"MCQ Multiple: Added choice {choice.id} ({choice.text})")
                             except Choice.DoesNotExist:
-                                # Log the error and try to get all available choices for this question
-                                logger.warning(f"Error processing choice {choice_id} for question {question.id}: Choice does not exist")
-                                valid_choices = list(Choice.objects.filter(question=question))
-                                if valid_choices:
-                                    logger.info(f"Found {len(valid_choices)} valid choices for question {question.id}")
-                                    # Add a valid choice as a fallback - preferably a correct one
-                                    correct_choices = [c for c in valid_choices if c.is_correct]
-                                    if correct_choices:
-                                        fallback_choice = correct_choices[0]
-                                    else:
-                                        fallback_choice = valid_choices[0]
-                                    
-                                    logger.info(f"Using fallback choice: {fallback_choice.id} - {fallback_choice.text}")
-                                    answer.selected_choices.add(fallback_choice)
-                                    
-                                    if not fallback_choice.is_correct:
-                                        all_correct = False
-                                else:
-                                    logger.error(f"No valid choices found for question {question.id}")
-                                    all_correct = False
+                                logger.error(f"Choice {choice_id} does not exist for question {question.id}")
                         except (ValueError, TypeError) as e:
                             logger.warning(f"Error processing choice {choice_id} for question {question.id}: {str(e)}")
-                            all_correct = False
                     
-                    # Check that all correct choices are selected
-                    # We're more lenient here - if the user selected correct answers for all the choices they did select
-                    # and they selected at least one correct choice, we'll give them points
-                    selected_correct_count = answer.selected_choices.filter(is_correct=True).count()
-                    if all_correct and selected_correct_count > 0:
-                        # Give full points if they got all correct answers, even if some were auto-selected due to 'undefined'
+                    # Check if the selected choices exactly match the correct choices
+                    if selected_choice_ids == correct_choice_ids and len(selected_choice_ids) > 0:
                         answer.points_earned = question.points
                         answer.is_correct = True
-                        logger.info(f"Marked question {question.id} as correct with {selected_correct_count} correct choices")
+                        logger.info(f"MCQ Multiple: Question {question.id} marked CORRECT - all correct choices selected, no incorrect ones")
+                    else:
+                        answer.is_correct = False
+                        answer.points_earned = 0
+                        logger.info(f"MCQ Multiple: Question {question.id} marked INCORRECT - Selected: {selected_choice_ids}, Correct: {correct_choice_ids}")
+                else:
+                    # Single value provided for multiple choice - treat as array with one element
+                    logger.warning(f"Single value {answer_value} provided for multiple choice question {question.id}")
+                    try:
+                        if isinstance(answer_value, str) and answer_value.isdigit():
+                            answer_value = int(answer_value)
+                        
+                        choice = Choice.objects.get(id=answer_value, question=question)
+                        answer.selected_choices.add(choice)
+                        
+                        # Check if this is the only correct choice
+                        correct_choices = question.choices.filter(is_correct=True)
+                        if correct_choices.count() == 1 and choice.is_correct:
+                            answer.points_earned = question.points
+                            answer.is_correct = True
+                            logger.info(f"MCQ Multiple: Single choice {choice.id} is the only correct answer")
+                        else:
+                            answer.is_correct = False
+                            answer.points_earned = 0
+                            logger.info(f"MCQ Multiple: Single choice not sufficient or incorrect")
+                    except (Choice.DoesNotExist, ValueError, TypeError) as e:
+                        logger.error(f"Error processing single choice for MCQ multiple: {str(e)}")
+                        answer.is_correct = False
+                        answer.points_earned = 0
                         
             elif question.question_type == 'text':
                 # Text question
@@ -1102,37 +1098,98 @@ def submit_quiz(request: HttpRequest, quiz_id: int) -> HttpResponse:
                 try:
                     logger.debug(f"Processing true/false answer: {answer_value} (type: {type(answer_value).__name__})")
                     
-                    # Convert the answer to a boolean value based on different possible formats
+                    # For True/False questions, the answer is usually a choice ID
+                    # We need to check if the selected choice is marked as correct
+                    selected_choice = None
+                    
+                    # Convert the answer to find the selected choice
                     if isinstance(answer_value, bool):
-                        # Direct boolean value
+                        # Direct boolean value - find matching choice
+                        choice_text = 'True' if answer_value else 'False'
+                        selected_choice = question.choices.filter(text__iexact=choice_text).first()
                         answer.boolean_answer = answer_value
                     elif isinstance(answer_value, str):
-                        # String value ('true' or 'false')
-                        answer.boolean_answer = answer_value.lower() == 'true'
-                    elif answer_value == 1:
-                        # Numeric 1 = true
-                        answer.boolean_answer = True
-                    elif answer_value == 0:
-                        # Numeric 0 = false
-                        answer.boolean_answer = False
+                        if answer_value.lower() in ['true', 'false']:
+                            # String value ('true' or 'false')
+                            answer.boolean_answer = answer_value.lower() == 'true'
+                            selected_choice = question.choices.filter(text__iexact=answer_value).first()
+                        else:
+                            # Might be a choice ID as string
+                            try:
+                                choice_id = int(answer_value)
+                                selected_choice = Choice.objects.get(id=choice_id, question=question)
+                                answer.boolean_answer = selected_choice.text.lower() == 'true'
+                            except (ValueError, TypeError, Choice.DoesNotExist):
+                                answer.boolean_answer = answer_value.lower() == 'true'
+                    elif isinstance(answer_value, int):
+                        # Could be choice ID or 0/1 boolean
+                        try:
+                            # First try as choice ID
+                            selected_choice = Choice.objects.get(id=answer_value, question=question)
+                            answer.boolean_answer = selected_choice.text.lower() == 'true'
+                            logger.debug(f"True/False: Found choice {selected_choice.id} - '{selected_choice.text}'")
+                        except Choice.DoesNotExist:
+                            # If not a valid choice ID, treat as 1=true, 0=false
+                            answer.boolean_answer = answer_value == 1
+                            choice_text = 'True' if answer.boolean_answer else 'False'
+                            selected_choice = question.choices.filter(text__iexact=choice_text).first()
                     else:
                         # Any other value, convert using Python's bool()
                         answer.boolean_answer = bool(answer_value)
+                        choice_text = 'True' if answer.boolean_answer else 'False'
+                        selected_choice = question.choices.filter(text__iexact=choice_text).first()
                     
-                    logger.debug(f"True/False question: Raw answer={answer_value}, Converted={answer.boolean_answer}, Correct={question.correct_answer}")
-                    
-                    # Check if answer matches correct answer
-                    correct_answer = question.correct_answer
-                    if correct_answer is not None:
-                        if isinstance(correct_answer, str):
-                            correct_answer = correct_answer.lower() == 'true'
-                            
-                        if answer.boolean_answer == correct_answer:
+                    # Add the selected choice to the answer
+                    if selected_choice:
+                        answer.selected_choices.add(selected_choice)
+                        logger.debug(f"True/False: Selected choice {selected_choice.id} - '{selected_choice.text}' (is_correct={selected_choice.is_correct})")
+                        
+                        # For True/False, simply check if the selected choice is marked as correct
+                        if selected_choice.is_correct:
                             answer.points_earned = question.points
                             answer.is_correct = True
+                            logger.info(f"True/False question {question.id} marked as CORRECT - selected correct choice")
+                        else:
+                            answer.is_correct = False
+                            answer.points_earned = 0
+                            logger.info(f"True/False question {question.id} marked as INCORRECT - selected wrong choice")
+                    else:
+                        # Fallback: Check using correct_answer field if no choice found
+                        logger.warning(f"No choice found for true/false answer, using correct_answer field")
+                        correct_answer = question.correct_answer
+                        if correct_answer is not None:
+                            # Convert correct_answer to boolean if it's a string
+                            if isinstance(correct_answer, str):
+                                correct_answer_bool = correct_answer.lower() in ['true', '1', 'yes']
+                            elif isinstance(correct_answer, bool):
+                                correct_answer_bool = correct_answer
+                            else:
+                                try:
+                                    correct_answer_bool = bool(int(correct_answer))
+                                except (ValueError, TypeError):
+                                    correct_answer_bool = bool(correct_answer)
+                            
+                            logger.debug(f"Comparing answer {answer.boolean_answer} with correct {correct_answer_bool}")
+                            
+                            if answer.boolean_answer == correct_answer_bool:
+                                answer.points_earned = question.points
+                                answer.is_correct = True
+                                logger.info(f"True/False question {question.id} marked as CORRECT")
+                            else:
+                                answer.is_correct = False
+                                answer.points_earned = 0
+                                logger.info(f"True/False question {question.id} marked as INCORRECT")
+                        else:
+                            # No way to determine correctness
+                            logger.error(f"Cannot determine correct answer for true/false question {question.id}")
+                            answer.is_correct = False
+                            answer.points_earned = 0
+                            
                 except Exception as e:
-                    logger.error(f"Error processing true/false answer: {str(e)}")
+                    logger.error(f"Error processing true/false answer: {str(e)}", exc_info=True)
                     # Don't award points if there was an error processing the answer
+                    answer.is_correct = False
+                    answer.points_earned = 0
         
         answer.save()
         total_points += question.points
@@ -1658,27 +1715,8 @@ def quiz_result(request: HttpRequest, quiz_id: int) -> HttpResponse:
         messages.info(request, "Results for this quiz are not available for review.")
         return redirect("academic_integration:student_quiz_dashboard")
     
-    # Ensure the total_points is calculated if it's not already set
-    if quiz_attempt.total_points == 0:
-        # Calculate total points by summing points from all questions
-        total_points = sum(question.points for question in quiz.questions.all())
-        quiz_attempt.total_points = total_points
-        quiz_attempt.save()
-        logger.info(f"Updated total_points for attempt {quiz_attempt.id} to {total_points}")
-    
-    # Ensure the total_points is calculated if it's not already set
-    if quiz_attempt.total_points == 0:
-        # Calculate total points by summing points from all questions
-        total_points = sum(question.points for question in quiz.questions.all())
-        quiz_attempt.total_points = total_points
-        quiz_attempt.save()
-        logger.info(f"Updated total_points for attempt {quiz_attempt.id} to {total_points}")
-    
-    # Calculate percentage score
-    if quiz_attempt.total_points > 0:
-        percentage = (quiz_attempt.score / quiz_attempt.total_points) * 100
-    else:
-        percentage = 0
+    # Calculate percentage score (already stored in quiz_attempt.percentage)
+    percentage = quiz_attempt.percentage
     
     # Get the total number of questions
     total_questions = quiz.questions.count()
@@ -1689,7 +1727,7 @@ def quiz_result(request: HttpRequest, quiz_id: int) -> HttpResponse:
         quiz_attempt.save()
         logger.info(f"Updated total_questions for quiz_attempt {quiz_attempt.id} to {total_questions}")
     
-    logger.info(f"Quiz {quiz_id} result page - Score: {quiz_attempt.score}/{quiz_attempt.total_points}, Questions: {total_questions}")
+    logger.info(f"Quiz {quiz_id} result page - Score: {quiz_attempt.score}/{quiz_attempt.total_points}, Percentage: {percentage}%, Questions: {total_questions}")
     
     # If the quiz attempt has no answers but the quiz has questions, add a warning
     has_no_answers = quiz_attempt.answers.count() == 0 and total_questions > 0
@@ -1702,7 +1740,6 @@ def quiz_result(request: HttpRequest, quiz_id: int) -> HttpResponse:
     context = {
         'quiz': quiz,
         'quiz_attempt': quiz_attempt,
-        'total_points': quiz_attempt.total_points,
         'percentage': percentage,
         'total_questions': total_questions,
         'has_no_answers': has_no_answers,
@@ -2709,6 +2746,21 @@ def manage_course(request: HttpRequest, course_id: str) -> HttpResponse:
 	api_error = None
 	course = {}
 	students = []
+	sorted_students = []
+	
+	# Fetch available batches for batch enrollment form
+	batches = []
+	try:
+		batch_response = requests.get(
+			f"{api_base_url()}/staff/all-batches",
+			timeout=5,
+		)
+		if batch_response.ok:
+			batch_body = _safe_json(batch_response)
+			if batch_body.get("success"):
+				batches = batch_body.get("batches", [])
+	except requests.RequestException:
+		logger.warning("Failed to fetch batches from API")
 
 	try:
 		response = requests.get(
@@ -2731,12 +2783,17 @@ def manage_course(request: HttpRequest, course_id: str) -> HttpResponse:
 				"batch": body.get("batch", "")
 			}
 			students = body.get("students", [])
+			# Sort students by roll number for display
+			sorted_students = sorted(students, key=lambda x: x.get('rollno', ''))
 		else:
 			api_error = body.get("message", "Failed to load course details.")
 
 	# Forms for adding students
 	single_student_form = StudentAddForm(request.POST or None if request.POST.get("form_type") == "single" else None)
-	batch_form = BatchEnrollmentForm(request.POST or None if request.POST.get("form_type") == "batch" else None)
+	batch_form = BatchEnrollmentForm(
+		request.POST or None if request.POST.get("form_type") == "batch" else None,
+		batches=batches
+	)
 	csv_form = CSVUploadForm(request.POST or None, request.FILES or None if request.POST.get("form_type") == "csv" else None)
 
 	# Process single student form
@@ -2804,45 +2861,401 @@ def manage_course(request: HttpRequest, course_id: str) -> HttpResponse:
 				return redirect("academic_integration:manage_course", course_id=course_id)
 			batch_form.add_error(None, body.get("message", "Failed to enroll batch."))
 
-	# Process CSV upload form
+	# Process CSV/Excel upload form
 	if request.method == "POST" and request.POST.get("form_type") == "csv" and csv_form.is_valid():
-		csv_file = request.FILES["csv_file"]
-		csv_data = csv_file.read().decode("utf-8")
+		import csv
+		import io
 		
-		# No need to normalize here - the API now handles case-insensitive matching
-		logger.info(f"Processing CSV upload for course: {course_id}")
+		upload_file = request.FILES["csv_file"]
+		file_name = upload_file.name.lower()
+		
+		# Extract roll numbers from file
+		roll_numbers = []
 		
 		try:
-			response = requests.post(
-				f"{api_base_url()}/staff/add-students-csv",
-				json={
-					"teacherEmail": staff_email,
-					"courseId": course_id,
-					"csvData": csv_data
-				},
-				timeout=10,
-			)
-			
-			logger.info(f"CSV Upload API Response Status: {response.status_code}, Body: {response.text}")
-			
-		except requests.RequestException as e:
-			logger.exception(f"CSV API request failed: {str(e)}")
-			csv_form.add_error(None, "Cannot reach Academic Analyzer API. Please try again later.")
-		else:
-			body = _safe_json(response)
-			if response.ok and body.get("success"):
-				results = body.get("results", {})
-				messages.success(
-					request,
-					f"Added {results.get('added', 0)} students. "
-					f"{results.get('notFound', 0)} not found. "
-					f"{results.get('alreadyEnrolled', 0)} already enrolled."
-				)
-				return redirect("academic_integration:manage_course", course_id=course_id)
+			if file_name.endswith('.csv'):
+				# Read CSV file
+				csv_data = upload_file.read().decode("utf-8")
+				csv_reader = csv.reader(io.StringIO(csv_data))
+				for row in csv_reader:
+					if row and row[0].strip():  # Skip empty rows
+						roll_numbers.append(row[0].strip())
+			elif file_name.endswith(('.xlsx', '.xls')):
+				# Read Excel file
+				try:
+					import openpyxl
+					import xlrd
+				except ImportError:
+					csv_form.add_error(None, "Excel support not installed. Please install openpyxl and xlrd packages.")
+				else:
+					if file_name.endswith('.xlsx'):
+						# Read .xlsx with openpyxl
+						workbook = openpyxl.load_workbook(upload_file)
+						sheet = workbook.active
+						for row in sheet.iter_rows(min_row=1, values_only=True):
+							if row and row[0]:
+								roll_numbers.append(str(row[0]).strip())
+					else:
+						# Read .xls with xlrd
+						workbook = xlrd.open_workbook(file_contents=upload_file.read())
+						sheet = workbook.sheet_by_index(0)
+						for row_idx in range(sheet.nrows):
+							cell_value = sheet.cell_value(row_idx, 0)
+							if cell_value:
+								roll_numbers.append(str(cell_value).strip())
 			else:
-				error_msg = body.get("message", "Failed to process CSV file.")
-				logger.warning(f"CSV upload failed: {error_msg}")
+				csv_form.add_error(None, "Invalid file format. Please upload CSV or Excel file.")
+				roll_numbers = []
+			
+			# Convert roll numbers to CSV format for API
+			csv_data = '\n'.join(roll_numbers)
+			
+		except Exception as e:
+			logger.exception(f"Error reading file: {e}")
+			csv_form.add_error(None, f"Error reading file: {str(e)}")
+			csv_data = None
+		
+		# Send to API if we have data
+		if csv_data:
+			# No need to normalize here - the API now handles case-insensitive matching
+			logger.info(f"Processing student list upload for course: {course_id}")
+			
+			try:
+				response = requests.post(
+					f"{api_base_url()}/staff/add-students-csv",
+					json={
+						"teacherEmail": staff_email,
+						"courseId": course_id,
+						"csvData": csv_data
+					},
+					timeout=10,
+				)
+				
+				logger.info(f"Student list Upload API Response Status: {response.status_code}, Body: {response.text}")
+				
+			except requests.RequestException as e:
+				logger.exception(f"Student list API request failed: {str(e)}")
+				csv_form.add_error(None, "Cannot reach Academic Analyzer API. Please try again later.")
+			else:
+				body = _safe_json(response)
+				if response.ok and body.get("success"):
+					results = body.get("results", {})
+					messages.success(
+						request,
+						f"Added {results.get('added', 0)} students. "
+						f"{results.get('notFound', 0)} not found. "
+						f"{results.get('alreadyEnrolled', 0)} already enrolled."
+					)
+					return redirect("academic_integration:manage_course", course_id=course_id)
+				else:
+					error_msg = body.get("message", "Failed to process file.")
+					logger.warning(f"Student list upload failed: {error_msg}")
 				csv_form.add_error(None, error_msg)
+
+	# Process bulk marks upload
+	bulk_marks_errors = []
+	bulk_marks_success = None
+	
+	# Initialize direct marks variables
+	direct_marks_errors = []
+	direct_marks_success = None
+	
+	# Log POST data for debugging
+	if request.method == "POST":
+		logger.info(f"POST request received - form_type: {request.POST.get('form_type')}")
+		logger.info(f"Files in request: {list(request.FILES.keys())}")
+	
+	if request.method == "POST" and request.POST.get("form_type") == "bulk_marks":
+		logger.info("Processing bulk marks upload")
+		if 'marks_csv_file' in request.FILES:
+			import csv
+			import io
+			import re
+			
+			marks_file = request.FILES['marks_csv_file']
+			file_name = marks_file.name.lower()
+			
+			try:
+				# Determine file type and read accordingly
+				if file_name.endswith('.csv'):
+					# Read CSV file
+					csv_data = marks_file.read().decode('utf-8')
+					csv_reader = csv.DictReader(io.StringIO(csv_data))
+					rows = list(csv_reader)
+				elif file_name.endswith(('.xlsx', '.xls')):
+					# Read Excel file
+					try:
+						import openpyxl
+						import xlrd
+					except ImportError:
+						bulk_marks_errors.append("Excel support not installed. Please install openpyxl and xlrd packages.")
+						rows = []
+					else:
+						if file_name.endswith('.xlsx'):
+							# Read .xlsx with openpyxl
+							workbook = openpyxl.load_workbook(marks_file)
+							sheet = workbook.active
+							# Convert to list of dicts
+							headers = [cell.value for cell in sheet[1]]
+							rows = []
+							for row in sheet.iter_rows(min_row=2, values_only=True):
+								row_dict = dict(zip(headers, row))
+								rows.append(row_dict)
+						else:
+							# Read .xls with xlrd
+							workbook = xlrd.open_workbook(file_contents=marks_file.read())
+							sheet = workbook.sheet_by_index(0)
+							# Convert to list of dicts
+							headers = [sheet.cell_value(0, col) for col in range(sheet.ncols)]
+							rows = []
+							for row_idx in range(1, sheet.nrows):
+								row_dict = dict(zip(headers, [sheet.cell_value(row_idx, col) for col in range(sheet.ncols)]))
+								rows.append(row_dict)
+				else:
+					bulk_marks_errors.append("Invalid file format. Please upload CSV or Excel file.")
+					rows = []
+				
+				# Column name mapping - flexible matching
+				def normalize_column_name(col):
+					"""Normalize column names for flexible matching"""
+					if col is None:
+						return ''
+					col = str(col).lower().strip()
+					col = re.sub(r'[^a-z0-9]', '', col)  # Remove special chars
+					return col
+				
+				# Map common column names to API field names
+				column_mapping = {
+					'tutorial1': 'tutorial1',
+					'tutorial2': 'tutorial2',
+					'tutorial3': 'tutorial3',
+					'tutorial4': 'tutorial4',
+					'ca1': 'CA1',
+					'ca2': 'CA2',
+					'assignment': 'assignmentPresentation',
+					'presentation': 'assignmentPresentation',
+					'assignmentpresentation': 'assignmentPresentation',
+				}
+				
+				# Track updates
+				updates_count = 0
+				errors_count = 0
+				
+				# Process each row
+				for row_num, row in enumerate(rows, start=2):  # Start at 2 (header is row 1)
+					# Get student identifier (roll number or email)
+					student_identifier = str(row.get('Roll Number', '') or row.get('rollno', '') or '').strip()
+					student_email = str(row.get('Email', '') or row.get('email', '') or '').strip()
+					
+					if not student_identifier and not student_email:
+						bulk_marks_errors.append(f"Row {row_num}: Missing student identifier")
+						errors_count += 1
+						continue
+					
+					# Collect marks to update (only non-empty values)
+					marks_updates = {}
+					
+					for col_name, value in row.items():
+						if value is None or str(value).strip() == '':
+							continue  # Skip empty values
+						
+						# Normalize column name
+						normalized = normalize_column_name(col_name)
+						
+						# Check if it matches a marks column
+						if normalized in column_mapping:
+							api_field = column_mapping[normalized]
+							try:
+								mark_value = float(str(value).strip())
+								if 0 <= mark_value <= 10:
+									marks_updates[api_field] = mark_value
+								else:
+									bulk_marks_errors.append(f"Row {row_num}, {col_name}: Mark {mark_value} out of range (0-10)")
+									errors_count += 1
+							except (ValueError, TypeError):
+								bulk_marks_errors.append(f"Row {row_num}, {col_name}: Invalid number '{value}'")
+								errors_count += 1
+					
+					# If we have marks to update, send to API
+					if marks_updates:
+						# Prepare API request for each mark type
+						for api_field, mark_value in marks_updates.items():
+							# Map field to API endpoint
+							endpoint_mapping = {
+								'tutorial1': 'add-tut1-mark',
+								'tutorial2': 'add-tut2-mark',
+								'tutorial3': 'add-tut3-mark',
+								'tutorial4': 'add-tut4-mark',
+								'CA1': 'add-ca1-mark',
+								'CA2': 'add-ca2-mark',
+								'assignmentPresentation': 'add-assignment-mark'
+							}
+							
+							endpoint = endpoint_mapping.get(api_field)
+							if not endpoint:
+								continue
+							
+							try:
+								# Send update to API
+								# Prepare student input - prefer rollno if available
+								student_input = {"mark": mark_value}
+								if student_identifier:
+									student_input["rollno"] = student_identifier
+								if student_email:
+									student_input["email"] = student_email
+								
+								api_response = requests.post(
+									f"{api_base_url()}/staff/{endpoint}",
+									json={
+										"teacherEmail": staff_email,
+										"courseId": course_id,
+										"studentInput": [student_input]
+									},
+									timeout=5,
+								)
+								
+								if api_response.ok and _safe_json(api_response).get("success"):
+									updates_count += 1
+								else:
+									error_msg = _safe_json(api_response).get("message", "Unknown error")
+									bulk_marks_errors.append(f"Row {row_num}: {error_msg}")
+									errors_count += 1
+									
+							except requests.RequestException as e:
+								bulk_marks_errors.append(f"Row {row_num}: API connection error")
+								errors_count += 1
+								logger.exception(f"Bulk marks API error: {e}")
+				
+				# Set success message
+				if updates_count > 0:
+					bulk_marks_success = f"Successfully updated {updates_count} mark entries."
+					if errors_count > 0:
+						bulk_marks_success += f" {errors_count} errors occurred."
+				elif errors_count > 0:
+					bulk_marks_errors.insert(0, "No marks were updated due to errors.")
+				else:
+					bulk_marks_errors.append("No valid marks found in the CSV file.")
+					
+			except Exception as e:
+				logger.exception(f"Error processing bulk marks CSV: {e}")
+				bulk_marks_errors.append(f"File processing error: {str(e)}")
+		else:
+			bulk_marks_errors.append("No file uploaded")
+
+	# Process direct mark entry
+	if request.method == "POST" and request.POST.get("form_type") == "direct_marks":
+		mark_component = request.POST.get("mark_component")
+		
+		logger.info(f"Direct marks submission - Component: {mark_component}")
+		logger.info(f"POST data keys: {list(request.POST.keys())}")
+		
+		if not mark_component:
+			direct_marks_errors.append("Please select a mark component")
+		else:
+			# Get total marks for conversion
+			total_marks = request.POST.get("total_marks")
+			try:
+				total_marks = float(total_marks) if total_marks else 10.0
+				if total_marks <= 0:
+					total_marks = 10.0
+			except ValueError:
+				total_marks = 10.0
+			
+			logger.info(f"Total marks for test: {total_marks}")
+			
+			# Map component to API endpoint
+			endpoint_mapping = {
+				'tutorial1': 'add-tut1-mark',
+				'tutorial2': 'add-tut2-mark',
+				'tutorial3': 'add-tut3-mark',
+				'tutorial4': 'add-tut4-mark',
+				'ca1': 'add-ca1-mark',
+				'ca2': 'add-ca2-mark',
+				'assignment': 'add-assignment-mark'
+			}
+			
+			endpoint = endpoint_mapping.get(mark_component)
+			if not endpoint:
+				direct_marks_errors.append(f"Invalid component: {mark_component}")
+			else:
+				# Collect all marks from the form
+				updates_count = 0
+				errors_count = 0
+				student_inputs = []
+				
+				# Get all student rollnos and their marks
+				counter = 1
+				while f"student_rollno_{counter}" in request.POST:
+					rollno = request.POST.get(f"student_rollno_{counter}")
+					email = request.POST.get(f"student_email_{counter}")
+					mark_value = request.POST.get(f"mark_{counter}")
+					
+					if mark_value and mark_value.strip():
+						try:
+							actual_mark = float(mark_value.strip())
+							
+							# Validate against total marks
+							if 0 <= actual_mark <= total_marks:
+								# Convert to equivalent out of 10
+								equivalent_mark = (actual_mark / total_marks) * 10
+								# Round to 2 decimal places
+								equivalent_mark = round(equivalent_mark, 2)
+								
+								student_input = {
+									"rollno": rollno,
+									"mark": equivalent_mark
+								}
+								if email:
+									student_input["email"] = email
+								student_inputs.append(student_input)
+								
+								logger.info(f"{rollno}: {actual_mark}/{total_marks} = {equivalent_mark}/10")
+							else:
+								direct_marks_errors.append(f"{rollno}: Mark {actual_mark} out of range (0-{total_marks})")
+								errors_count += 1
+						except ValueError:
+							direct_marks_errors.append(f"{rollno}: Invalid mark value '{mark_value}'")
+							errors_count += 1
+					
+					counter += 1
+				
+				logger.info(f"Collected {len(student_inputs)} student marks: {student_inputs}")
+				
+				# Send to API if we have marks to update
+				if student_inputs:
+					try:
+						api_url = f"{api_base_url()}/staff/{endpoint}"
+						api_payload = {
+							"teacherEmail": staff_email,
+							"courseId": course_id,
+							"studentInput": student_inputs
+						}
+						logger.info(f"Sending to API: {api_url}")
+						logger.info(f"Payload: {api_payload}")
+						
+						api_response = requests.post(
+							api_url,
+							json=api_payload,
+							timeout=10,
+						)
+						
+						logger.info(f"API response status: {api_response.status_code}")
+						logger.info(f"API response body: {_safe_json(api_response)}")
+						
+						if api_response.ok and _safe_json(api_response).get("success"):
+							updates_count = len(student_inputs)
+							direct_marks_success = f"Successfully updated {updates_count} student marks for {mark_component.upper()}."
+						else:
+							error_msg = _safe_json(api_response).get("message", "Unknown error")
+							direct_marks_errors.append(f"API Error: {error_msg}")
+							errors_count += 1
+							
+					except requests.RequestException as e:
+						direct_marks_errors.append("API connection error. Please try again.")
+						errors_count += 1
+						logger.exception(f"Direct marks API error: {e}")
+				else:
+					direct_marks_errors.append("No marks entered. Please enter at least one mark.")
 
 	# Get performance statistics for the course using our new endpoint
 	overall_stats = {}
@@ -2985,6 +3398,7 @@ def manage_course(request: HttpRequest, course_id: str) -> HttpResponse:
 		"staff_name": request.session.get("staff_name", staff_email),
 		"course": course,
 		"students": students,
+		"sorted_students": sorted_students,
 		"api_error": api_error,
 		"single_student_form": single_student_form,
 		"batch_form": batch_form,
@@ -2994,8 +3408,58 @@ def manage_course(request: HttpRequest, course_id: str) -> HttpResponse:
 		"overall_stats": overall_stats,
 		"quiz_stats": quiz_stats,
 		"tutorial_max_marks": 10,  # Default max marks for tutorials
+		# Bulk marks upload
+		"bulk_marks_errors": bulk_marks_errors,
+		"bulk_marks_success": bulk_marks_success,
+		# Direct marks entry
+		"direct_marks_errors": direct_marks_errors,
+		"direct_marks_success": direct_marks_success,
 	}
 	return render(request, "academic_integration/manage_course.html", context)
+
+
+def remove_student_from_course(request: HttpRequest, course_id: str) -> HttpResponse:
+	"""
+	View to remove a student from a course.
+	"""
+	staff_email = request.session.get("staff_email")
+	if not staff_email:
+		messages.error(request, "Please log in to continue.")
+		return redirect("academic_integration:staff_login")
+	
+	if request.method != "POST":
+		messages.error(request, "Invalid request method.")
+		return redirect("academic_integration:manage_course", course_id=course_id)
+	
+	student_rollno = request.POST.get("student_rollno")
+	
+	if not student_rollno:
+		messages.error(request, "Student roll number is required.")
+		return redirect("academic_integration:manage_course", course_id=course_id)
+	
+	try:
+		response = requests.post(
+			f"{api_base_url()}/staff/remove-student",
+			json={
+				"teacherEmail": staff_email,
+				"courseId": course_id,
+				"studentRollno": student_rollno
+			},
+			timeout=5,
+		)
+		
+		body = _safe_json(response)
+		
+		if response.ok and body.get("success"):
+			messages.success(request, body.get("message", "Student removed successfully."))
+		else:
+			messages.error(request, body.get("message", "Failed to remove student."))
+			
+	except requests.RequestException as e:
+		logger.exception(f"Failed to remove student: {str(e)}")
+		messages.error(request, "Cannot reach Academic Analyzer API. Please try again later.")
+	
+	return redirect("academic_integration:manage_course", course_id=course_id)
 
 
 def staff_analytics(request: HttpRequest) -> HttpResponse:
@@ -3288,54 +3752,93 @@ def student_profile(request: HttpRequest) -> HttpResponse:
 	# Handle form submission
 	if request.method == "POST":
 		try:
-			# Extract form data
-			new_name = request.POST.get("student_name")
-			new_email = request.POST.get("student_email")
-			new_password = request.POST.get("student_password")
-			new_password_confirm = request.POST.get("student_password_confirm")
-			new_email_notifications = "email_notifications" in request.POST
+			form_type = request.POST.get("form_type")
 			
-			# Validate form data
-			if new_password and new_password != new_password_confirm:
-				messages.error(request, "Passwords do not match.")
-				return redirect("academic_integration:student_profile")
-			
-			# Update profile through API
-			update_data = {
-				"rollno": student_roll_number,
-				"email": new_email,
-				"email_notifications": new_email_notifications
-			}
-			
-			# Only include name if editing is allowed
-			if allow_name_edit and new_name:
-				update_data["name"] = new_name
-			
-			# Only include password if provided
-			if new_password:
-				update_data["password"] = new_password
-			
-			response = requests.post(
-				f"{api_base_url()}/student/update-profile",
-				json=update_data,
-				timeout=5,
-			)
-			
-			if response.ok:
-				data = _safe_json(response)
-				if data.get('success'):
-					# Update session data
-					if allow_name_edit and new_name:
-						request.session["student_name"] = new_name
-					request.session["student_email"] = new_email
-					request.session["email_notifications"] = new_email_notifications
-					
-					messages.success(request, "Profile updated successfully.")
+			# Handle General Info Form
+			if form_type == "general_info":
+				new_name = request.POST.get("student_name")
+				new_email = request.POST.get("student_email")
+				new_email_notifications = "email_notifications" in request.POST
+				
+				# Validate email
+				if not new_email:
+					messages.error(request, "Email is required.")
 					return redirect("academic_integration:student_profile")
+				
+				# Update profile through API
+				update_data = {
+					"rollno": student_roll_number,
+					"email": new_email,
+					"email_notifications": new_email_notifications
+				}
+				
+				# Only include name if editing is allowed
+				if allow_name_edit and new_name:
+					update_data["name"] = new_name
+				
+				response = requests.post(
+					f"{api_base_url()}/student/update-profile",
+					json=update_data,
+					timeout=5,
+				)
+				
+				if response.ok:
+					data = _safe_json(response)
+					if data.get('success'):
+						# Update session data
+						if allow_name_edit and new_name:
+							request.session["student_name"] = new_name
+						request.session["student_email"] = new_email
+						request.session["email_notifications"] = new_email_notifications
+						
+						messages.success(request, "Profile information updated successfully.")
+						return redirect("academic_integration:student_profile")
+					else:
+						messages.error(request, data.get('message', "Failed to update profile."))
 				else:
-					messages.error(request, data.get('message', "Failed to update profile."))
-			else:
-				messages.error(request, "Failed to update profile. Please try again later.")
+					messages.error(request, "Failed to update profile. Please try again later.")
+			
+			# Handle Change Password Form
+			elif form_type == "change_password":
+				new_password = request.POST.get("student_password")
+				new_password_confirm = request.POST.get("student_password_confirm")
+				
+				# Validate passwords
+				if not new_password:
+					messages.error(request, "Please enter a new password.")
+					return redirect("academic_integration:student_profile")
+				
+				if new_password != new_password_confirm:
+					messages.error(request, "Passwords do not match.")
+					return redirect("academic_integration:student_profile")
+				
+				if len(new_password) < 6:
+					messages.error(request, "Password must be at least 6 characters long.")
+					return redirect("academic_integration:student_profile")
+				
+				# Update password through API
+				update_data = {
+					"rollno": student_roll_number,
+					"email": student_email,  # Keep existing email
+					"password": new_password
+				}
+				
+				response = requests.post(
+					f"{api_base_url()}/student/update-profile",
+					json=update_data,
+					timeout=5,
+				)
+				
+				if response.ok:
+					data = _safe_json(response)
+					if data.get('success'):
+						messages.success(request, "Password changed successfully. Please use your new password for future logins.")
+						return redirect("academic_integration:student_profile")
+					else:
+						messages.error(request, data.get('message', "Failed to change password."))
+				else:
+					messages.error(request, "Failed to change password. Please try again later.")
+			
 		except requests.RequestException:
 			logger.exception("Failed to update student profile")
 			messages.error(request, "Could not reach Academic Analyzer API. Please try again later.")
@@ -3441,3 +3944,341 @@ def generate_questions_from_content(request: HttpRequest) -> HttpResponse:
 	except Exception as e:
 		logger.exception(f"Unexpected error in generate_questions_from_content: {e}")
 		return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+def download_marks_template(request: HttpRequest, course_id: str) -> HttpResponse:
+	"""
+	Download a CSV template with enrolled students for bulk marks upload.
+	Allows selection of which columns to include.
+	"""
+	import csv
+	from django.http import HttpResponse
+	
+	staff_email = request.session.get("staff_email")
+	if not staff_email:
+		messages.info(request, "Please log in to continue.")
+		return redirect("academic_integration:staff_login")
+	
+	# Get course details and students
+	try:
+		response = requests.get(
+			f"{api_base_url()}/staff/course-detail",
+			params={"courseId": course_id},
+			timeout=5,
+		)
+	except requests.RequestException:
+		logger.exception("Failed to load course details")
+		messages.error(request, "Could not reach Academic Analyzer API.")
+		return redirect("academic_integration:manage_course", course_id=course_id)
+	
+	body = _safe_json(response)
+	if not (response.ok and body.get("success")):
+		messages.error(request, "Failed to load course details.")
+		return redirect("academic_integration:manage_course", course_id=course_id)
+	
+	students = body.get("students", [])
+	
+	# Sort students by roll number
+	students = sorted(students, key=lambda x: x.get('rollno', ''))
+	
+	# Get selected columns from query parameters
+	include_tutorial1 = request.GET.get('include_tutorial1') == 'on'
+	include_tutorial2 = request.GET.get('include_tutorial2') == 'on'
+	include_tutorial3 = request.GET.get('include_tutorial3') == 'on'
+	include_tutorial4 = request.GET.get('include_tutorial4') == 'on'
+	include_ca1 = request.GET.get('include_ca1') == 'on'
+	include_ca2 = request.GET.get('include_ca2') == 'on'
+	include_assignment = request.GET.get('include_assignment') == 'on'
+	
+	# Build header based on selections
+	header = ['Roll Number', 'Name', 'Email']
+	
+	# Map of column names
+	column_map = []
+	if include_tutorial1:
+		header.append('Tutorial 1')
+		column_map.append('tutorial1')
+	if include_tutorial2:
+		header.append('Tutorial 2')
+		column_map.append('tutorial2')
+	if include_tutorial3:
+		header.append('Tutorial 3')
+		column_map.append('tutorial3')
+	if include_tutorial4:
+		header.append('Tutorial 4')
+		column_map.append('tutorial4')
+	if include_ca1:
+		header.append('CA 1')
+		column_map.append('ca1')
+	if include_ca2:
+		header.append('CA 2')
+		column_map.append('ca2')
+	if include_assignment:
+		header.append('Assignment/Presentation')
+		column_map.append('assignment')
+	
+	# Create CSV response
+	response = HttpResponse(content_type='text/csv')
+	response['Content-Disposition'] = f'attachment; filename="marks_template_{course_id}.csv"'
+	
+	writer = csv.writer(response)
+	
+	# Write header
+	writer.writerow(header)
+	
+	# Write student rows with empty mark columns
+	for student in students:
+		row = [
+			student.get('rollno', ''),
+			student.get('name', ''),
+			student.get('email', '')
+		]
+		# Add empty cells for each selected column
+		row.extend(['' for _ in column_map])
+		writer.writerow(row)
+	
+	return response
+
+
+def download_students_template(request: HttpRequest) -> HttpResponse:
+	"""
+	Download a CSV template with all students in the system for course enrollment.
+	"""
+	import csv
+	from django.http import HttpResponse
+	
+	logger.info("Download students template requested")
+	
+	staff_email = request.session.get("staff_email")
+	if not staff_email:
+		logger.warning("No staff email in session")
+		messages.info(request, "Please log in to continue.")
+		return redirect("academic_integration:staff_login")
+	
+	logger.info(f"Staff email: {staff_email}")
+	
+	# Get all students from API
+	try:
+		api_url = f"{api_base_url()}/staff/all-students"
+		logger.info(f"Fetching students from: {api_url}")
+		response = requests.get(
+			api_url,
+			params={"email": staff_email},
+			timeout=10,
+		)
+		logger.info(f"API response status: {response.status_code}")
+	except requests.RequestException as e:
+		logger.exception(f"Failed to load all students: {e}")
+		messages.error(request, "Could not reach Academic Analyzer API.")
+		return redirect("academic_integration:staff_dashboard")
+	
+	body = _safe_json(response)
+	logger.info(f"API response: {body}")
+	
+	if not (response.ok and body.get("success")):
+		logger.error(f"Failed to load students: {body.get('message')}")
+		messages.error(request, "Failed to load students list.")
+		return redirect("academic_integration:staff_dashboard")
+	
+	students = body.get("students", [])
+	logger.info(f"Found {len(students)} students")
+	
+	# Create CSV response
+	response = HttpResponse(content_type='text/csv')
+	response['Content-Disposition'] = 'attachment; filename="all_students_template.csv"'
+	
+	writer = csv.writer(response)
+	
+	# Write header with instruction
+	writer.writerow(['Roll Number', 'Name', 'Batch', 'Email'])
+	writer.writerow([])  # Empty row
+	writer.writerow(['# Keep only the roll numbers you want to add to the course'])
+	writer.writerow(['# Delete the Name, Batch, and Email columns before uploading'])
+	writer.writerow([])  # Empty row
+	
+	# Write all students
+	for student in students:
+		writer.writerow([
+			student.get('rollno', ''),
+			student.get('name', ''),
+			student.get('batch', ''),
+			student.get('email', '')
+		])
+	
+	logger.info("CSV template generated successfully")
+	return response
+
+
+# ==================== ARCHIVE MANAGEMENT VIEWS ====================
+
+def archive_course(request: HttpRequest, course_id: str) -> HttpResponse:
+	"""Archive a course - move it to archived collection in MongoDB"""
+	
+	# Check if staff is logged in via session
+	staff_email = request.session.get("staff_email")
+	logger.info(f"Archive course request - Email from session: {staff_email}")
+	logger.info(f"Archive course request - Method: {request.method}")
+	
+	if not staff_email:
+		logger.warning("No staff_email in session, redirecting to login")
+		messages.error(request, "You must be logged in as staff")
+		return redirect("academic_integration:staff_login")
+	
+	if request.method != "POST":
+		logger.warning(f"Invalid method: {request.method}")
+		return HttpResponseBadRequest("Only POST method allowed")
+	
+	logger.info(f"Attempting to archive course: {course_id} by {staff_email}")
+	
+	try:
+		# Call Academic Analyzer API to archive the course
+		response = requests.post(
+			f"{api_base_url()}/staff/archive-course",
+			json={"email": staff_email, "courseId": course_id},
+			timeout=10,
+		)
+		
+		logger.info(f"Archive API response: {response.status_code}")
+		
+		if response.status_code == 200:
+			body = response.json()
+			if body.get("success"):
+				logger.info(f"Course {course_id} archived successfully")
+				messages.success(request, f"Course {course_id} has been archived successfully!")
+				return redirect("academic_integration:staff_dashboard")
+			else:
+				logger.error(f"Archive failed: {body.get('message', 'Unknown error')}")
+				messages.error(request, f"Failed to archive course: {body.get('message', 'Unknown error')}")
+		else:
+			logger.error(f"Archive API error: {response.status_code}")
+			messages.error(request, f"API error: {response.status_code}")
+	
+	except requests.exceptions.RequestException as e:
+		logger.error(f"Error archiving course: {e}")
+		messages.error(request, "Failed to connect to Academic Analyzer API")
+	
+	return redirect("academic_integration:manage_course", course_id=course_id)
+
+
+def restore_course(request: HttpRequest, archived_course_id: str) -> HttpResponse:
+	"""Restore an archived course back to active courses"""
+	
+	# Check if staff is logged in via session
+	staff_email = request.session.get("staff_email")
+	if not staff_email:
+		messages.error(request, "You must be logged in as staff")
+		return redirect("academic_integration:staff_login")
+	
+	try:
+		# Call Academic Analyzer API to restore the course
+		response = requests.post(
+			f"{api_base_url()}/staff/restore-course",
+			json={"email": staff_email, "archivedCourseId": archived_course_id},
+			timeout=10,
+		)
+		
+		if response.status_code == 200:
+			body = response.json()
+			if body.get("success"):
+				messages.success(request, f"Course has been restored successfully!")
+				return redirect("academic_integration:staff_dashboard")
+			else:
+				messages.error(request, f"Failed to restore course: {body.get('message', 'Unknown error')}")
+		else:
+			messages.error(request, f"API error: {response.status_code}")
+	
+	except requests.exceptions.RequestException as e:
+		logger.error(f"Error restoring course: {e}")
+		messages.error(request, "Failed to connect to Academic Analyzer API")
+	
+	return redirect("academic_integration:archived_courses")
+
+
+def archived_courses(request: HttpRequest) -> HttpResponse:
+	"""Display all archived courses for the logged-in staff member"""
+	
+	# Check if staff is logged in via session
+	staff_email = request.session.get("staff_email")
+	logger.info(f"Archived courses request - Email from session: {staff_email}")
+	
+	if not staff_email:
+		logger.warning("No staff_email in session for archived courses, redirecting to login")
+		messages.error(request, "You must be logged in as staff")
+		return redirect("academic_integration:staff_login")
+	
+	try:
+		# Fetch archived courses from API
+		response = requests.get(
+			f"{api_base_url()}/staff/archived-courses",
+			params={"email": staff_email},
+			timeout=10,
+		)
+		
+		if response.status_code == 200:
+			body = response.json()
+			if body.get("success"):
+				archived_courses_list = body.get("archivedCourses", [])
+			else:
+				archived_courses_list = []
+				messages.warning(request, "No archived courses found")
+		else:
+			archived_courses_list = []
+			messages.error(request, "Failed to fetch archived courses")
+	
+	except requests.exceptions.RequestException as e:
+		logger.error(f"Error fetching archived courses: {e}")
+		archived_courses_list = []
+		messages.error(request, "Failed to connect to Academic Analyzer API")
+	
+	context = {
+		"archived_courses": archived_courses_list,
+		"staff_name": request.session.get("staff_name", "Staff"),
+	}
+	
+	return render(request, "academic_integration/archived_courses.html", context)
+
+
+def archived_course_detail(request: HttpRequest, archived_course_id: str) -> HttpResponse:
+	"""Display detailed view of an archived course (READ-ONLY)"""
+	
+	# Check if staff is logged in via session
+	staff_email = request.session.get("staff_email")
+	if not staff_email:
+		messages.error(request, "You must be logged in as staff")
+		return redirect("academic_integration:staff_login")
+	
+	try:
+		# Fetch archived course details from API
+		response = requests.get(
+			f"{api_base_url()}/staff/archived-course-detail",
+			params={"archivedCourseId": archived_course_id},
+			timeout=10,
+		)
+		
+		if response.status_code == 200:
+			body = response.json()
+			if body.get("success"):
+				course_data = body.get("course")
+				
+				# Sort students by roll number
+				students = course_data.get("students", [])
+				students.sort(key=lambda s: s.get("rollno", ""))
+				course_data["students"] = students
+				
+				context = {
+					"course": course_data,
+					"archived_course_id": archived_course_id,
+					"staff_name": request.session.get("staff_name", "Staff"),
+				}
+				
+				return render(request, "academic_integration/archived_course_detail.html", context)
+			else:
+				messages.error(request, "Archived course not found")
+		else:
+			messages.error(request, f"API error: {response.status_code}")
+	
+	except requests.exceptions.RequestException as e:
+		logger.error(f"Error fetching archived course detail: {e}")
+		messages.error(request, "Failed to connect to Academic Analyzer API")
+	
+	return redirect("academic_integration:archived_courses")

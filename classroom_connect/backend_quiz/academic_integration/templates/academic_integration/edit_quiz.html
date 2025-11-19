@@ -165,14 +165,21 @@
                 <textarea class="form-control question-text" rows="2" required>${questionText}</textarea>
             </div>
             
-            <div class="mb-3">
-                <label class="form-label">Question Type *</label>
-                <select class="form-select question-type">
-                    <option value="mcq_single" ${questionType === 'mcq_single' ? 'selected' : ''}>Multiple Choice (Single Answer)</option>
-                    <option value="mcq_multiple" ${questionType === 'mcq_multiple' ? 'selected' : ''}>Multiple Choice (Multiple Answers)</option>
-                    <option value="true_false" ${questionType === 'true_false' ? 'selected' : ''}>True or False</option>
-                    <option value="text" ${questionType === 'text' ? 'selected' : ''}>Text Input</option>
-                </select>
+            <div class="row mb-3">
+                <div class="col-md-8">
+                    <label class="form-label">Question Type *</label>
+                    <select class="form-select question-type">
+                        <option value="mcq_single" ${questionType === 'mcq_single' ? 'selected' : ''}>Multiple Choice (Single Answer)</option>
+                        <option value="mcq_multiple" ${questionType === 'mcq_multiple' ? 'selected' : ''}>Multiple Choice (Multiple Answers)</option>
+                        <option value="true_false" ${questionType === 'true_false' ? 'selected' : ''}>True or False</option>
+                        <option value="text" ${questionType === 'text' ? 'selected' : ''}>Text Input</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Points *</label>
+                    <input type="number" class="form-control question-points" min="1" value="${questionPoints || 1}" required>
+                    <small class="text-muted">Marks for this question</small>
+                </div>
             </div>
             
             <div class="choices-container">
@@ -366,6 +373,7 @@
                 .replace(/\${questionId}/g, questionId)
                 .replace(/\${index}/g, index + 1)
                 .replace(/\${questionText}/g, question.text || '')
+                .replace(/\${questionPoints \|\| 1}/g, question.points || 1)
                 .replace(/\${questionType}/g, question.question_type);
             
             const tempDiv = document.createElement('div');
@@ -405,6 +413,7 @@
             .replace(/\${questionId}/g, questionId)
             .replace(/\${index}/g, questionNumber)
             .replace(/\${questionText}/g, '')
+            .replace(/\${questionPoints \|\| 1}/g, '1')
             .replace(/\${questionType === 'mcq_single' \? 'selected' : ''}/g, 'selected')
             .replace(/\${questionType === 'mcq_multiple' \? 'selected' : ''}/g, '')
             .replace(/\${questionType === 'true_false' \? 'selected' : ''}/g, '')
@@ -565,10 +574,12 @@
         document.querySelectorAll('.question-card').forEach((questionCard, index) => {
             const questionType = questionCard.querySelector('.question-type').value;
             const questionText = questionCard.querySelector('.question-text').value;
+            const questionPoints = parseInt(questionCard.querySelector('.question-points').value) || 1;
             
             const questionData = {
                 text: questionText,
                 type: questionType,
+                points: questionPoints,
                 order: index,
                 choices: []
             };

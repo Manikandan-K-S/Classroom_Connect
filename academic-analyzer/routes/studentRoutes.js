@@ -10,4 +10,8 @@ router.get('/dashboard', student.getStudentDashboard);
 router.get('/course-detail', student.getCourseDetail);
 router.get('/course-marks', student.getCourseMarks);
 
+// Profile Management
+router.get('/profile', student.getStudentProfile);
+router.post('/update-profile', student.updateStudentProfile);
+
 module.exports = router;

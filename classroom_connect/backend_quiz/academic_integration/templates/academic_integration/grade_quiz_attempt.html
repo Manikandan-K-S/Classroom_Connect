@@ -57,7 +57,7 @@
     {% csrf_token %}
     <div class="card shadow-sm mb-4">
         <div class="card-header bg-white">
-            <h5 class="card-title mb-0">Answers to Grade</h5>
+            <h5 class="card-title mb-0">Student Answers & Results</h5>
         </div>
         <div class="card-body">
             {% if answers_to_grade %}
@@ -67,10 +67,10 @@
                         <div class="d-flex justify-content-between align-items-center">
                             <h6 class="mb-0">Question {{ forloop.counter }}</h6>
                             <div>
-                                <span class="badge {% if answer.is_correct %}bg-success{% else %}bg-secondary{% endif %} me-2">
-                                    {% if answer.is_correct %}Correct{% else %}Not Graded{% endif %}
+                                <span class="badge {% if answer.is_correct %}bg-success{% else %}bg-warning{% endif %} me-2">
+                                    {% if answer.is_correct %}Correct{% else %}Incorrect{% endif %}
                                 </span>
-                                <span class="badge bg-primary">{{ answer.question.points }} points</span>
+                                <span class="badge bg-primary">{{ answer.points_earned }}/{{ answer.question.points }} points</span>
                             </div>
                         </div>
                     </div>
@@ -91,35 +91,12 @@
                             </div>
                             
                             <div class="mb-3">
-                                <strong>Reference Answer:</strong>
-                                <div class="card bg-light">
-                                    <div class="card-body">
-                                        {{ answer.question.correct_answer|linebreaks|default:"<em>No reference answer provided</em>" }}
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <div class="mb-3">
                                 <label for="points_{{ answer.id }}" class="form-label">Points to Award (out of {{ answer.question.points }})</label>
                                 <input type="number" class="form-control" id="points_{{ answer.id }}" 
                                        name="points_{{ answer.id }}" min="0" max="{{ answer.question.points }}"
                                        value="{{ answer.points_earned }}" required>
-                            </div>
-                            
-                            <div class="mb-3">
-                                <label for="feedback_{{ answer.id }}" class="form-label">Feedback (optional)</label>
-                                <textarea class="form-control" id="feedback_{{ answer.id }}" 
-                                          name="feedback_{{ answer.id }}" rows="3">{{ answer.feedback }}</textarea>
-                            </div>
-                            
-                            <div class="form-check mb-3">
-                                <input class="form-check-input" type="checkbox" id="correct_{{ answer.id }}" 
-                                       name="correct_{{ answer.id }}" {% if answer.is_correct %}checked{% endif %}>
-                                <label class="form-check-label" for="correct_{{ answer.id }}">
-                                    Mark as correct
-                                </label>
-                                <small class="form-text text-muted d-block">
-                                    Check this if the answer is essentially correct, even if not awarded full points.
+                                <small class="form-text text-muted d-block mt-1">
+                                    Answer will be marked as correct if points > 0, incorrect if 0 points.
                                 </small>
                             </div>
                         {% else %}
@@ -127,7 +104,14 @@
                                 <strong>Student's Answer:</strong>
                                 <div class="mt-2">
                                     {% if answer.question.question_type == 'true_false' %}
-                                        <p>{{ answer.boolean_answer|yesno:"True,False" }}</p>
+                                        <p class="{% if answer.boolean_answer == answer.question.correct_answer %}text-success{% else %}text-danger{% endif %}">
+                                            {{ answer.boolean_answer|yesno:"True,False" }}
+                                            {% if answer.boolean_answer == answer.question.correct_answer %}
+                                                <i class="bi bi-check-circle-fill text-success ms-1"></i>
+                                            {% else %}
+                                                <i class="bi bi-x-circle-fill text-danger ms-1"></i>
+                                            {% endif %}
+                                        </p>
                                     {% elif answer.selected_choices.exists %}
                                         {% for choice in answer.selected_choices.all %}
                                             <div class="mb-1 {% if choice.is_correct %}text-success{% else %}text-danger{% endif %}">
@@ -140,7 +124,7 @@
                                             </div>
                                         {% endfor %}
                                     {% else %}
-                                        <p><em>No answer provided</em></p>
+                                        <p class="text-muted"><em>No answer provided</em></p>
                                     {% endif %}
                                 </div>
                             </div>
@@ -163,12 +147,6 @@
                                 </div>
                             </div>
                             
-                            <div class="mb-3">
-                                <label for="feedback_{{ answer.id }}" class="form-label">Feedback (optional)</label>
-                                <textarea class="form-control" id="feedback_{{ answer.id }}" 
-                                          name="feedback_{{ answer.id }}" rows="3">{{ answer.feedback }}</textarea>
-                            </div>
-                            
                             <div class="alert alert-info">
                                 <i class="bi bi-info-circle me-2"></i> Auto-graded question - Points: {{ answer.points_earned }} / {{ answer.question.points }}
                             </div>
@@ -184,7 +162,7 @@
                 </div>
             {% else %}
                 <div class="alert alert-info">
-                    <p>There are no answers that require manual grading for this attempt.</p>
+                    <p>No answers found for this quiz attempt.</p>
                 </div>
                 
                 <div class="d-grid gap-2 col-md-6 mx-auto">
@@ -196,60 +174,5 @@
         </div>
     </div>
 </form>
-
-<div class="card shadow-sm mb-4">
-    <div class="card-header bg-white">
-        <h5 class="card-title mb-0">Overall Feedback</h5>
-    </div>
-    <div class="card-body">
-        <form method="post" action="{% url 'academic_integration:update_attempt_feedback' attempt.id %}">
-            {% csrf_token %}
-            <div class="mb-3">
-                <label for="attempt_feedback" class="form-label">Feedback for Student</label>
-                <textarea class="form-control" id="attempt_feedback" name="feedback" rows="5">{{ attempt.feedback }}</textarea>
-                <small class="form-text text-muted">
-                    This feedback will be visible to the student when they view their quiz results.
-                </small>
-            </div>
-            
-            <div class="text-end">
-                <button type="submit" class="btn btn-primary">
-                    <i class="bi bi-save"></i> Save Feedback
-                </button>
-            </div>
-        </form>
-    </div>
-</div>
-
-<script>
-    // Add event listener to points inputs to automatically check/uncheck the "correct" checkbox
-    document.addEventListener('DOMContentLoaded', function() {
-        const pointsInputs = document.querySelectorAll('input[name^="points_"]');
-        pointsInputs.forEach(input => {
-            const answerId = input.name.split('_')[1];
-            const correctCheckbox = document.getElementById(`correct_${answerId}`);
-            
-            if (correctCheckbox) {
-                input.addEventListener('change', function() {
-                    const maxPoints = parseInt(this.max);
-                    const currentPoints = parseInt(this.value);
-                    
-                    // If points are more than 0, suggest marking as correct
-                    if (currentPoints > 0 && !correctCheckbox.checked) {
-                        if (confirm('Would you like to mark this answer as correct since you\'ve awarded points?')) {
-                            correctCheckbox.checked = true;
-                        }
-                    } 
-                    // If points are 0, suggest marking as incorrect
-                    else if (currentPoints === 0 && correctCheckbox.checked) {
-                        if (confirm('Would you like to mark this answer as incorrect since you\'ve awarded 0 points?')) {
-                            correctCheckbox.checked = false;
-                        }
-                    }
-                });
-            }
-        });
-    });
-</script>
 
 {% endblock %}

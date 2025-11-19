@@ -2,6 +2,7 @@ const Teacher = require('../models/Teacher');
 const Student = require('../models/Student');
 const Course = require('../models/Course');
 const Performance = require('../models/Performance');
+const ArchivedCourse = require('../models/ArchivedCourse');
 const csv = require('csv-parser');
 const fs = require('fs');
 const path = require('path');
@@ -574,11 +575,19 @@ const createMarkUpdateHandler = (markField) => async (req, res) => {
         const updateKey = `marks.${markField}`;
 
         for (const input of studentsToUpdate) {
-            const { email, mark } = input;
-            const student = await Student.findOne({ email });
+            const { email, rollno, mark } = input;
+            
+            // Find student by email or rollno
+            let student;
+            if (email) {
+                student = await Student.findOne({ email });
+            }
+            if (!student && rollno) {
+                student = await Student.findOne({ rollno });
+            }
             
             if (!student) {
-                updateResults.push({ email, status: 'failed', message: 'Student not found' });
+                updateResults.push({ email: email || rollno, status: 'failed', message: 'Student not found' });
                 continue;
             }
 
@@ -590,9 +599,9 @@ const createMarkUpdateHandler = (markField) => async (req, res) => {
             );
 
             if (performance) {
-                updateResults.push({ email, status: 'success', message: `${markField} updated to ${mark}` });
+                updateResults.push({ email: email || student.email, status: 'success', message: `${markField} updated to ${mark}` });
             } else {
-                updateResults.push({ email, status: 'failed', message: 'Performance record not found. Ensure student is enrolled via /add-student.' });
+                updateResults.push({ email: email || student.email, status: 'failed', message: 'Performance record not found. Ensure student is enrolled via /add-student.' });
             }
         }
 
@@ -1357,5 +1366,401 @@ exports.getStudentDetail = async (req, res) => {
     } catch (error) {
         console.error('Error fetching student detail:', error);
         return res.status(500).json({ success: false, message: 'Server error' });
+    }
+};
+
+// @route POST /staff/archive-course
+// @desc Archive a course - move it to ArchivedCourse collection
+// @input email (teacher email), courseId
+exports.archiveCourse = async (req, res) => {
+    const { email, courseId } = req.body;
+    
+    try {
+        // Find teacher and course
+        const teacher = await Teacher.findOne({ email });
+        if (!teacher) {
+            return res.status(404).json({ success: false, message: 'Teacher not found' });
+        }
+        
+        const course = await Course.findOne({ courseId }).populate('enrolledStudents');
+        if (!course) {
+            return res.status(404).json({ success: false, message: 'Course not found' });
+        }
+        
+        // Verify teacher handles this course
+        if (!teacher.coursesHandled.includes(course._id)) {
+            return res.status(403).json({ success: false, message: 'Unauthorized to archive this course' });
+        }
+        
+        // Fetch all performance data for students in this course
+        const performanceData = await Performance.find({ 
+            courseId: course._id,
+            studentId: { $in: course.enrolledStudents.map(s => s._id) }
+        }).populate('studentId');
+        
+        console.log(`📊 Found ${performanceData.length} performance records for course ${courseId}`);
+        
+        // Create performance snapshot with correct field access
+        const performanceSnapshot = performanceData.map(perf => {
+            console.log(`Student ${perf.studentId.rollno} marks:`, perf.marks);
+            
+            // Calculate total marks from all components
+            const totalMarks = (perf.marks.tutorial1 || 0) + 
+                             (perf.marks.tutorial2 || 0) + 
+                             (perf.marks.tutorial3 || 0) + 
+                             (perf.marks.tutorial4 || 0) + 
+                             (perf.marks.CA1 || 0) + 
+                             (perf.marks.CA2 || 0) + 
+                             (perf.marks.assignmentPresentation || 0);
+            
+            console.log(`  Total calculated: ${totalMarks}`);
+            
+            return {
+                studentId: perf.studentId._id,
+                marks: {
+                    tutorial1: perf.marks.tutorial1 || 0,
+                    tutorial2: perf.marks.tutorial2 || 0,
+                    tutorial3: perf.marks.tutorial3 || 0,
+                    tutorial4: perf.marks.tutorial4 || 0,
+                    CA1: perf.marks.CA1 || 0,
+                    CA2: perf.marks.CA2 || 0,
+                    assignmentPresentation: perf.marks.assignmentPresentation || 0
+                },
+                totalMarks: totalMarks
+            };
+        });
+        
+        console.log(`✅ Created performance snapshot with ${performanceSnapshot.length} entries`);
+        
+        // Create archived course document
+        const archivedCourse = new ArchivedCourse({
+            courseId: course.courseId,
+            courseName: course.courseName,
+            courseCode: course.courseCode,
+            batch: course.batch,
+            teacherId: teacher._id,
+            teacherEmail: teacher.email,
+            enrolledStudents: course.enrolledStudents.map(s => s._id),
+            archivedBy: email,
+            originalCreatedAt: course.createdAt,
+            performanceSnapshot: performanceSnapshot
+        });
+        
+        await archivedCourse.save();
+        console.log(`💾 Archived course saved with ID: ${archivedCourse._id}`);
+        console.log(`   Performance snapshot contains ${archivedCourse.performanceSnapshot.length} student records`);
+        
+        // Remove course from teacher's coursesHandled
+        teacher.coursesHandled = teacher.coursesHandled.filter(c => !c.equals(course._id));
+        await teacher.save();
+        console.log(`👤 Removed course from teacher's coursesHandled`);
+        
+        // CRITICAL FIX: Remove course from all students' enrolledCourses arrays
+        // This prevents broken references when the course is deleted
+        const studentIds = course.enrolledStudents.map(s => s._id);
+        const updateResult = await Student.updateMany(
+            { _id: { $in: studentIds } },
+            { $pull: { enrolledCourses: course._id } }
+        );
+        console.log(`👥 Removed course from ${updateResult.modifiedCount} students' enrolledCourses arrays`);
+        
+        // Delete performance records for this course
+        const deletedPerf = await Performance.deleteMany({ courseId: course._id });
+        console.log(`🗑️ Deleted ${deletedPerf.deletedCount} performance records`);
+        
+        // Delete the original course
+        await Course.deleteOne({ _id: course._id });
+        console.log(`🗑️ Deleted original course: ${course.courseId}`);
+        
+        res.json({ 
+            success: true, 
+            message: 'Course archived successfully',
+            archivedCourseId: archivedCourse._id
+        });
+        
+    } catch (error) {
+        console.error('❌ Error archiving course:', error);
+        res.status(500).json({ success: false, message: 'Server error while archiving course' });
+    }
+};
+
+// @route POST /staff/restore-course
+// @desc Restore an archived course back to active courses
+// @input email (teacher email), archivedCourseId
+exports.restoreCourse = async (req, res) => {
+    const { email, archivedCourseId } = req.body;
+    
+    try {
+        // Find teacher
+        const teacher = await Teacher.findOne({ email });
+        if (!teacher) {
+            return res.status(404).json({ success: false, message: 'Teacher not found' });
+        }
+        
+        // Find archived course
+        const archivedCourse = await ArchivedCourse.findById(archivedCourseId).populate('enrolledStudents');
+        if (!archivedCourse) {
+            return res.status(404).json({ success: false, message: 'Archived course not found' });
+        }
+        
+        // Verify teacher is authorized to restore
+        if (archivedCourse.teacherEmail !== email) {
+            return res.status(403).json({ success: false, message: 'Unauthorized to restore this course' });
+        }
+        
+        // Check if course with same courseId already exists
+        const existingCourse = await Course.findOne({ courseId: archivedCourse.courseId });
+        if (existingCourse) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'A course with this ID already exists in active courses' 
+            });
+        }
+        
+        // Recreate the course
+        const restoredCourse = new Course({
+            courseName: archivedCourse.courseName,
+            courseId: archivedCourse.courseId,
+            courseCode: archivedCourse.courseCode,
+            batch: archivedCourse.batch,
+            enrolledStudents: archivedCourse.enrolledStudents.map(s => s._id),
+            createdAt: archivedCourse.originalCreatedAt || new Date()
+        });
+        
+        await restoredCourse.save();
+        console.log(`📚 Restored course: ${restoredCourse.courseId} with ID: ${restoredCourse._id}`);
+        
+        // Restore performance data with correct nested structure
+        console.log(`📊 Restoring ${archivedCourse.performanceSnapshot.length} performance records`);
+        
+        const performanceRecords = archivedCourse.performanceSnapshot.map(snapshot => {
+            console.log(`  Restoring marks for student ${snapshot.studentId}:`, snapshot.marks);
+            return {
+                studentId: snapshot.studentId,
+                courseId: restoredCourse._id,
+                marks: {
+                    tutorial1: snapshot.marks.tutorial1,
+                    tutorial2: snapshot.marks.tutorial2,
+                    tutorial3: snapshot.marks.tutorial3,
+                    tutorial4: snapshot.marks.tutorial4,
+                    CA1: snapshot.marks.CA1,
+                    CA2: snapshot.marks.CA2,
+                    assignmentPresentation: snapshot.marks.assignmentPresentation
+                }
+            };
+        });
+        
+        const insertedPerf = await Performance.insertMany(performanceRecords);
+        console.log(`✅ Inserted ${insertedPerf.length} performance records`);
+        
+        // Add course back to teacher's coursesHandled
+        teacher.coursesHandled.push(restoredCourse._id);
+        await teacher.save();
+        console.log(`👤 Added course back to teacher's coursesHandled`);
+        
+        // CRITICAL FIX: Update all students' enrolledCourses arrays with the new course ObjectId
+        // This is necessary because when we archived the course, the old Course document was deleted,
+        // and now we've created a new one with a different ObjectId
+        const studentIds = archivedCourse.enrolledStudents.map(s => s._id);
+        const updateResult = await Student.updateMany(
+            { _id: { $in: studentIds } },
+            { $addToSet: { enrolledCourses: restoredCourse._id } }
+        );
+        console.log(`👥 Updated ${updateResult.modifiedCount} students' enrolledCourses arrays`);
+        
+        // Delete the archived course
+        await ArchivedCourse.deleteOne({ _id: archivedCourse._id });
+        console.log(`🗑️ Deleted archived course record`);
+        
+        res.json({ 
+            success: true, 
+            message: 'Course restored successfully',
+            courseId: restoredCourse.courseId
+        });
+        
+    } catch (error) {
+        console.error('❌ Error restoring course:', error);
+        res.status(500).json({ success: false, message: 'Server error while restoring course' });
+    }
+};
+
+// @route GET /staff/archived-courses
+// @desc Get all archived courses for a teacher
+// @input email (query param)
+exports.getArchivedCourses = async (req, res) => {
+    const { email } = req.query;
+    
+    try {
+        const teacher = await Teacher.findOne({ email });
+        if (!teacher) {
+            return res.status(404).json({ success: false, message: 'Teacher not found' });
+        }
+        
+        // Find all archived courses for this teacher
+        const archivedCourses = await ArchivedCourse.find({ teacherEmail: email })
+            .populate('enrolledStudents', 'name rollno email')
+            .sort({ archivedAt: -1 });
+        
+        res.json({ 
+            success: true, 
+            archivedCourses: archivedCourses.map(course => ({
+                id: course._id,
+                courseId: course.courseId,
+                courseName: course.courseName,
+                courseCode: course.courseCode,
+                batch: course.batch,
+                archivedAt: course.archivedAt,
+                studentCount: course.enrolledStudents.length
+            }))
+        });
+        
+    } catch (error) {
+        console.error('Error fetching archived courses:', error);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+};
+
+// @route GET /staff/all-batches
+// @desc Get all available batches from students
+exports.getAllBatches = async (req, res) => {
+    try {
+        // Get distinct batches from students collection
+        const batches = await Student.distinct('batch');
+        
+        // Filter out empty values and sort
+        const validBatches = batches.filter(batch => batch && batch.trim() !== '').sort();
+        
+        res.json({
+            success: true,
+            batches: validBatches
+        });
+    } catch (error) {
+        console.error('Error fetching batches:', error);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+};
+
+// @route POST /staff/remove-student
+// @desc Remove a student from a course
+// @input teacherEmail, courseId, studentRollno or studentEmail
+exports.removeStudentFromCourse = async (req, res) => {
+    const { teacherEmail, courseId, studentRollno, studentEmail } = req.body;
+    
+    try {
+        // Find teacher and course
+        const { teacher, course } = await findTeacherAndCourse(teacherEmail, courseId);
+        if (!teacher || !course) {
+            return res.status(404).json({ success: false, message: 'Teacher or Course not found' });
+        }
+        
+        // Find student by rollno (case-insensitive) or email
+        let student;
+        if (studentRollno) {
+            student = await Student.findOne({ rollno: { $regex: new RegExp(`^${studentRollno}$`, 'i') } });
+        } else if (studentEmail) {
+            student = await Student.findOne({ email: studentEmail });
+        }
+        
+        if (!student) {
+            return res.status(404).json({ 
+                success: false, 
+                message: `Student not found${studentRollno ? ` with roll number: ${studentRollno}` : studentEmail ? ` with email: ${studentEmail}` : ''}`
+            });
+        }
+        
+        // Check if student is enrolled in the course
+        if (!course.enrolledStudents.includes(student._id)) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Student is not enrolled in this course' 
+            });
+        }
+        
+        // Remove student from course and course from student's enrolledCourses
+        await Promise.all([
+            Course.updateOne(
+                { _id: course._id },
+                { $pull: { enrolledStudents: student._id } }
+            ),
+            Student.updateOne(
+                { _id: student._id },
+                { $pull: { enrolledCourses: course._id } }
+            ),
+            // Remove performance record
+            Performance.deleteOne({
+                studentId: student._id,
+                courseId: course._id
+            })
+        ]);
+        
+        console.log(`✅ Removed student ${student.rollno} (${student.name}) from course ${course.courseCode}`);
+        
+        res.json({ 
+            success: true, 
+            message: `Successfully removed ${student.name} (${student.rollno}) from ${course.courseName}`,
+            student: {
+                name: student.name,
+                rollno: student.rollno,
+                email: student.email
+            }
+        });
+    } catch (error) {
+        console.error('Error removing student from course:', error);
+        res.status(500).json({ success: false, message: 'Server error', error: error.message });
+    }
+};
+
+// @route GET /staff/archived-course-detail
+// @desc Get detailed information about an archived course
+// @input archivedCourseId (query param)
+exports.getArchivedCourseDetail = async (req, res) => {
+    const { archivedCourseId } = req.query;
+    
+    try {
+        const archivedCourse = await ArchivedCourse.findById(archivedCourseId)
+            .populate('enrolledStudents', 'name rollno email batch')
+            .populate('teacherId', 'name email');
+        
+        if (!archivedCourse) {
+            return res.status(404).json({ success: false, message: 'Archived course not found' });
+        }
+        
+        // Combine student info with their performance snapshot
+        const studentsWithMarks = archivedCourse.enrolledStudents.map(student => {
+            const perfSnapshot = archivedCourse.performanceSnapshot.find(
+                p => p.studentId.toString() === student._id.toString()
+            );
+            
+            return {
+                _id: student._id,
+                name: student.name,
+                rollno: student.rollno,
+                email: student.email,
+                batch: student.batch,
+                marks: perfSnapshot ? perfSnapshot.marks : {},
+                totalMarks: perfSnapshot ? perfSnapshot.totalMarks : 0
+            };
+        });
+        
+        res.json({
+            success: true,
+            course: {
+                id: archivedCourse._id,
+                courseId: archivedCourse.courseId,
+                courseName: archivedCourse.courseName,
+                courseCode: archivedCourse.courseCode,
+                batch: archivedCourse.batch,
+                teacherName: archivedCourse.teacherId.name,
+                teacherEmail: archivedCourse.teacherId.email,
+                archivedAt: archivedCourse.archivedAt,
+                archivedBy: archivedCourse.archivedBy,
+                originalCreatedAt: archivedCourse.originalCreatedAt,
+                students: studentsWithMarks
+            }
+        });
+        
+    } catch (error) {
+        console.error('Error fetching archived course detail:', error);
+        res.status(500).json({ success: false, message: 'Server error' });
     }
 };

@@ -3,7 +3,7 @@ from django.urls import path
 from . import views
 # Removed Gemini-related imports
 from .views_quiz_grading import (
-    quiz_student_performance, grade_quiz_attempt, update_attempt_feedback,
+    quiz_student_performance, grade_quiz_attempt,
     quiz_answer_analysis
 )
 from .views_debug import debug_quiz_availability, debug_quiz_timezone
@@ -24,6 +24,16 @@ urlpatterns = [
     path("api/check-academic-analyzer-status/", check_api_status, name="check_api_status"),
     path("staff/course/create/", views.create_course, name="create_course"),
     path("staff/course/<str:course_id>/", views.manage_course, name="manage_course"),
+    path("staff/course/<str:course_id>/remove-student/", views.remove_student_from_course, name="remove_student_from_course"),
+    path("staff/course/<str:course_id>/download-marks-template/", views.download_marks_template, name="download_marks_template"),
+    path("staff/students/template/download/", views.download_students_template, name="download_students_template"),
+    
+    # Archive management
+    path("staff/archived-courses/", views.archived_courses, name="archived_courses"),
+    path("staff/archived-course/<str:archived_course_id>/", views.archived_course_detail, name="archived_course_detail"),
+    path("staff/course/<str:course_id>/archive/", views.archive_course, name="archive_course"),
+    path("staff/archived-course/<str:archived_course_id>/restore/", views.restore_course, name="restore_course"),
+    
     path("staff/students/", views.manage_students, name="manage_students"),
     path("staff/students/all/", views.view_all_students, name="view_all_students"),
     path("staff/student/detail/<str:rollno>/", views.student_detail, name="student_detail"),
@@ -46,7 +56,6 @@ urlpatterns = [
     path("staff/quiz/<int:quiz_id>/performance/", quiz_student_performance, name="quiz_student_performance"),
     path("staff/quiz/<int:quiz_id>/answers/", quiz_answer_analysis, name="quiz_answer_analysis"),
     path("staff/quiz/attempt/<int:attempt_id>/grade/", grade_quiz_attempt, name="grade_quiz_attempt"),
-    path("staff/quiz/attempt/<int:attempt_id>/feedback/", update_attempt_feedback, name="update_attempt_feedback"),
     
     # Student quiz routes
     path("student/quizzes/", views.student_quiz_dashboard, name="student_quiz_dashboard"),

@@ -76,6 +76,79 @@ exports.getCourseDetail = async (req, res) => {
     }
 };
 
+// @route GET /student/profile
+// @desc Get student profile information
+exports.getStudentProfile = async (req, res) => {
+    const { rollno } = req.query;
+    try {
+        const student = await Student.findOne({ rollno });
+        if (!student) {
+            return res.status(404).json({ success: false, message: 'Student not found' });
+        }
+        
+        // Return student profile data
+        res.json({ 
+            success: true, 
+            student: {
+                name: student.name,
+                rollno: student.rollno,
+                email: student.email,
+                batch: student.batch,
+                allow_name_edit: false, // Name changes require admin approval
+                email_notifications: true // Default to true
+            }
+        });
+    } catch (error) {
+        console.error('Get Profile Error:', error);
+        res.status(500).json({ success: false, message: 'Server error retrieving profile' });
+    }
+};
+
+// @route POST /student/update-profile
+// @desc Update student profile information
+exports.updateStudentProfile = async (req, res) => {
+    const { rollno, email, password } = req.body;
+    
+    try {
+        const student = await Student.findOne({ rollno });
+        if (!student) {
+            return res.status(404).json({ success: false, message: 'Student not found' });
+        }
+        
+        // Update allowed fields
+        if (email && email !== student.email) {
+            // Check if email is already in use by another student
+            const existingStudent = await Student.findOne({ email, rollno: { $ne: rollno } });
+            if (existingStudent) {
+                return res.status(400).json({ success: false, message: 'Email is already in use by another student' });
+            }
+            student.email = email;
+        }
+        
+        // Update password if provided
+        // NOTE: In production, use bcrypt to hash passwords!
+        if (password && password.trim() !== '') {
+            student.password = password;
+        }
+        
+        await student.save();
+        
+        res.json({ 
+            success: true, 
+            message: 'Profile updated successfully',
+            student: {
+                name: student.name,
+                rollno: student.rollno,
+                email: student.email,
+                batch: student.batch
+            }
+        });
+    } catch (error) {
+        console.error('Update Profile Error:', error);
+        res.status(500).json({ success: false, message: 'Server error updating profile' });
+    }
+};
+
 // @route GET /student/course-marks
 // @desc Get detailed marks with components for a specific course
 exports.getCourseMarks = async (req, res) => {

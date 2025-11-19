@@ -111,10 +111,10 @@ class Quiz(models.Model):
                 # Make it aware for proper comparison
                 aware_start = timezone.make_aware(self.start_date)
                 if now < aware_start:
-                    return False, f"Quiz start date ({self.start_date}) is in the future (TIMEZONE ISSUE: naive datetime)"
+                    return False, "Quiz has not started yet"
             else:
                 if now < self.start_date:
-                    return False, f"Quiz start date ({self.start_date}) is in the future"
+                    return False, "Quiz has not started yet"
                     
         if self.complete_by_date:
             # Check if complete_by_date is naive and report it

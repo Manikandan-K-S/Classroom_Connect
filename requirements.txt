@@ -1,16 +1,22 @@
-# Django and related packages
+# ===================================================================
+# Classroom Connect - Requirements File
+# Python 3.10+ recommended
+# ===================================================================
+
+# Core Django Framework
 Django==5.2.5
 djangorestframework==3.14.0
+
+# Async & WebSocket Support
 channels==4.3.1
+channels-redis==4.2.0
 daphne==4.2.1
 asgiref==3.9.1
-sqlparse==0.5.3
-tzdata==2025.2
 
-# Database adapter
+# Database Adapters
 psycopg2-binary==2.9.10
 
-# API access and networking
+# HTTP & API Communication
 requests==2.32.3
 urllib3==2.2.1
 
@@ -21,33 +27,80 @@ google-auth==2.28.1
 googleapis-common-protos==1.63.0
 protobuf==4.25.3
 
-# Document processing
+# Document Processing & File Handling
 PyPDF2==3.0.1
 python-docx==1.1.0
 Pillow==10.2.0
+openpyxl==3.1.2
+xlrd==2.0.1
+et-xmlfile==2.0.0
 
-# Configuration and environment management
+# Configuration Management
 python-dotenv==1.1.1
 
-# Web socket and async support
+# Web Socket & Async Framework Support
 autobahn==24.4.2
 Twisted==25.5.0
 txaio==25.6.1
+Automat==25.4.16
+hyperlink==21.0.0
+incremental==24.7.2
+constantly==23.10.4
+zope.interface==7.2
+attrs==25.3.0
 
-# Security and cryptography
+# Security & Cryptography
 cryptography==45.0.6
 pyOpenSSL==25.1.0
 pyasn1==0.6.1
 pyasn1_modules==0.4.2
+service-identity==24.2.0
+cffi==1.17.1
+pycparser==2.22
 idna==3.10
 
-# Development tools
+# Code Quality & Development Tools
 black==25.1.0
 isort==6.0.1
+mypy-extensions==1.1.0
+pathspec==0.12.1
+platformdirs==4.3.8
+click==8.2.1
+regex==2024.5.10
 
-# Utility packages
+# Utility Packages
 colorama==0.4.6
 tqdm==4.66.2
 pytz==2024.1
-typing_extensions==4.14.1
+typing-extensions==4.14.1
 six==1.16.0
+packaging==25.0
+sqlparse==0.5.3
+tzdata==2025.2
+
+# ===================================================================
+# Installation Instructions:
+# ===================================================================
+# 1. Create a virtual environment:
+#    python -m venv venv
+#
+# 2. Activate virtual environment:
+#    Windows: venv\Scripts\activate
+#    Linux/Mac: source venv/bin/activate
+#
+# 3. Install requirements:
+#    pip install -r requirements.txt
+#
+# 4. For development with auto-reload:
+#    pip install watchdog
+#
+# ===================================================================
+# Optional Development Dependencies:
+# ===================================================================
+# watchdog==3.0.0  # For auto-reload during development
+# pytest==7.4.3  # For testing
+# pytest-django==4.7.0  # Django testing integration
+# faker==22.0.0  # Generate fake data for testing
+# django-debug-toolbar==4.2.0  # Debug toolbar for Django
+#
+# ===================================================================

@@ -58,11 +58,20 @@ class StudentForm(forms.Form):
 
 
 class BatchEnrollmentForm(forms.Form):
-    batch = forms.CharField(
-        label="Batch to Enroll", 
-        max_length=20,
-        widget=forms.TextInput(attrs={"class": "form-control", "placeholder": "e.g. 24MXG1"})
+    batch = forms.ChoiceField(
+        label="Batch to Enroll",
+        widget=forms.Select(attrs={"class": "form-control"})
     )
+    
+    def __init__(self, *args, **kwargs):
+        batches = kwargs.pop('batches', [])
+        super().__init__(*args, **kwargs)
+        
+        # Set choices from the provided batches list
+        if batches:
+            self.fields['batch'].choices = [(batch, batch) for batch in batches]
+        else:
+            self.fields['batch'].choices = [('', 'No batches available')]
 
 
 class CSVUploadForm(forms.Form):

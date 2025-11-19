@@ -3,6 +3,174 @@
 
 {% block title %}{{ quiz.title }}{% endblock %}
 
+{% block extra_head %}
+<style>
+    /* Make entire option clickable */
+    .choice-option {
+        cursor: pointer;
+        padding: 20px 25px;
+        margin-bottom: 15px;
+        border: 2px solid #a7a7a7;
+        border-radius: 10px;
+        transition: all 0.2s ease;
+        background-color: #cecece;
+        display: flex;
+        align-items: center;
+        user-select: none;
+        position: relative;
+        min-height: 60px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+
+    .choice-option:hover {
+        border-color: #667eea;
+        background-color: #f8f9ff;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(102, 126, 234, 0.15);
+    }
+
+    .choice-option.selected {
+        border-color: #667eea;
+        background-color: #f0f3ff;
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+    }
+
+    .choice-option.selected::after {
+        content: "✓";
+        position: absolute;
+        right: 20px;
+        color: #667eea;
+        font-weight: bold;
+        font-size: 1.4rem;
+    }
+    
+    .choice-option input[type="radio"],
+    .choice-option input[type="checkbox"] {
+        width: 20px;
+        height: 20px;
+        margin-right: 15px;
+        cursor: pointer;
+        flex-shrink: 0;
+    }
+    
+    .choice-option label {
+        cursor: pointer;
+        margin: 0;
+        flex-grow: 1;
+        font-size: 1.05rem;
+        line-height: 1.5;
+    }
+    
+    .choice-option input[type="radio"]:checked,
+    .choice-option input[type="checkbox"]:checked {
+        accent-color: #667eea;
+    }
+    
+    /* Question card styling */
+    .question-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 10px;
+        padding: 20px;
+        margin-bottom: 25px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+    
+    .question-card p {
+        color: white;
+        font-size: 1.15rem;
+        margin: 0;
+        line-height: 1.6;
+    }
+    
+    .answer-container {
+        background: #f8f9fa;
+        padding: 20px;
+        border-radius: 10px;
+        margin-top: 15px;
+    }
+    
+    .answer-section-title {
+        font-weight: 600;
+        color: #495057;
+        margin-bottom: 15px;
+        font-size: 1.1rem;
+    }
+    
+    /* Timer styling */
+    #timer {
+        font-size: 1.2rem;
+        padding: 10px 20px;
+        border-radius: 8px;
+        font-weight: 600;
+    }
+    
+    /* Progress bar */
+    .progress {
+        height: 25px;
+        border-radius: 8px;
+        background-color: #e9ecef;
+    }
+    
+    .progress-bar {
+        font-size: 0.95rem;
+        font-weight: 600;
+        line-height: 25px;
+        border-radius: 8px;
+        transition: width 0.4s ease;
+    }
+    
+    /* Navigation buttons */
+    .btn-lg {
+        padding: 12px 30px;
+        font-size: 1.1rem;
+        font-weight: 500;
+        border-radius: 8px;
+    }
+    
+    /* Question number badge */
+    .question-number {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 8px 16px;
+        border-radius: 6px;
+        font-weight: 600;
+        display: inline-block;
+        margin-bottom: 15px;
+    }
+    
+    /* Code formatting styles */
+    code {
+        background-color: #f4f4f4;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        padding: 2px 6px;
+        font-family: 'Courier New', Courier, monospace;
+        font-size: 0.9em;
+        color: #c7254e;
+        white-space: pre-wrap;
+        word-break: break-word;
+    }
+    
+    .question-card code {
+        background-color: rgba(255, 255, 255, 0.2);
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        color: #fff;
+    }
+    
+    .choice-option code {
+        background-color: #f8f9fa;
+        border: 1px solid #dee2e6;
+        color: #d63384;
+    }
+    
+    .choice-option.selected code {
+        background-color: #e7f1ff;
+        border-color: #b6d4fe;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="row mb-4">
     <div class="col">
@@ -50,9 +218,14 @@
             <div class="col-md-3">
                 <p><strong>Duration:</strong> {{ quiz.duration_minutes }} minutes</p>
             </div>
-            <div class="col-md-3">
+            <div class="col-md-2">
                 <p>
                     <strong>Questions:</strong> {{ quiz.questions.count }}
+                </p>
+            </div>
+            <div class="col-md-2">
+                <p id="total-points-display">
+                    <strong>Total Points:</strong> <span id="total-points-value">-</span>
                 </p>
             </div>
             <div class="col-md-3">
@@ -65,7 +238,7 @@
                     {% endif %}
                 </p>
             </div>
-            <div class="col-md-3">
+            <div class="col-md-2">
                 <p>
                     <strong>Results:</strong>
                     {% if quiz.show_results %}Immediate{% else %}Hidden{% endif %}
@@ -140,6 +313,15 @@
         console.log(`[${source}] Current answers:`, JSON.stringify(answers));
         console.log(`[${source}] Answer keys:`, Object.keys(answers));
     }
+    
+    // Function to format text with code snippets (backticks)
+    function formatTextWithCode(text) {
+        if (!text) return '';
+        
+        // Replace `code` with <code>code</code>
+        // Handles both inline `code` and multi-line code blocks
+        return text.replace(/`([^`]+)`/g, '<code>$1</code>');
+    }
 
     // When DOM is ready
     document.addEventListener('DOMContentLoaded', function() {
@@ -166,6 +348,10 @@
             if (data.success) {
                 quizData = data.quiz;
                 quizAttempt = data.attempt;
+                
+                // Calculate and display total points
+                const totalPoints = quizData.questions.reduce((sum, q) => sum + (q.points || 1), 0);
+                document.getElementById('total-points-value').textContent = totalPoints;
                 
                 // Hide loading
                 document.getElementById('loading').style.display = 'none';
@@ -274,156 +460,263 @@
             questionDiv.dataset.questionIndex = index;
             questionDiv.style.display = 'none';
             
-            const questionHeader = document.createElement('h5');
-            questionHeader.textContent = `Question ${index + 1} of ${totalQuestions}`;
+            const questionHeader = document.createElement('div');
+            questionHeader.classList.add('question-number');
+            questionHeader.innerHTML = `Question ${index + 1} of ${totalQuestions} <span class="badge bg-primary ms-2">${question.points || 1} ${(question.points || 1) === 1 ? 'point' : 'points'}</span>`;
             questionDiv.appendChild(questionHeader);
             
             const questionText = document.createElement('div');
-            questionText.classList.add('card', 'mb-3');
-            questionText.innerHTML = `
-                <div class="card-body">
-                    <p class="card-text">${question.text}</p>
-                </div>
-            `;
+            questionText.classList.add('question-card');
+            questionText.innerHTML = `<p>${formatTextWithCode(question.text)}</p>`;
             questionDiv.appendChild(questionText);
             
             const answerContainer = document.createElement('div');
             answerContainer.classList.add('answer-container');
             
             if (question.question_type === 'mcq_single') {
+                const answerTitle = document.createElement('div');
+                answerTitle.classList.add('answer-section-title');
+                answerTitle.textContent = 'Select one answer:';
+                answerContainer.appendChild(answerTitle);
+                
                 // Single choice question
                 question.choices.forEach((choice, choiceIndex) => {
-                    const choiceDiv = document.createElement('div');
-                    choiceDiv.classList.add('form-check', 'mb-2');
-                    
-                    // Log the choice object to help with debugging
-                    console.log(`MCQ Single: Choice for question ${question.id}:`, choice);
-                    
-                    // Always use the actual choice ID from the database
-                    // This ensures we're using the actual database ID
                     const choiceId = choice.id;
                     
-                    choiceDiv.innerHTML = `
+                    const choiceOption = document.createElement('div');
+                    choiceOption.classList.add('choice-option');
+                    choiceOption.setAttribute('data-choice-id', choiceId);
+                    
+                    choiceOption.innerHTML = `
                         <input class="form-check-input" type="radio" name="question_${question.id}" id="choice_${question.id}_${choiceId}" value="${choiceId}">
                         <label class="form-check-label" for="choice_${question.id}_${choiceId}">
-                            ${choice.text}
+                            ${formatTextWithCode(choice.text)}
                         </label>
                     `;
-                    answerContainer.appendChild(choiceDiv);
                     
-                    // Add event listener to save answer
-                    const input = choiceDiv.querySelector('input');
+                    const input = choiceOption.querySelector('input');
+                    const label = choiceOption.querySelector('label');
+                    
+                    // Make entire div clickable - simplified and more reliable
+                    choiceOption.addEventListener('click', function(e) {
+                        // Don't prevent default for input/label clicks
+                        if (e.target === input || e.target === label || label.contains(e.target)) {
+                            return; // Let the natural input behavior handle it
+                        }
+
+                        // For div clicks, toggle the input
+                        e.preventDefault();
+                        e.stopPropagation();
+                        input.checked = true;
+                        input.dispatchEvent(new Event('change', { bubbles: true }));
+                    });
+
+                    // Add change event to update styling and store answer
                     input.addEventListener('change', function() {
+                        // Remove selected class from all choices in this question
+                        answerContainer.querySelectorAll('.choice-option').forEach(opt => {
+                            opt.classList.remove('selected');
+                        });
+
+                        // Add selected class to this choice if checked
                         if (this.checked) {
-                            answers[`question_${question.id}`] = parseInt(this.value) || this.value;
-                            console.log(`MCQ Single answer selected for question_${question.id}:`, this.value);
+                            choiceOption.classList.add('selected');
+                            // Store the answer
+                            const answerValue = parseInt(this.value) || this.value;
+                            answers[`question_${question.id}`] = answerValue;
+                            console.log(`MCQ Single answer selected for question_${question.id}:`, answerValue);
+                            console.log('Current answers object:', JSON.stringify(answers));
                             updateProgress();
                             logAnswersState('mcq_single_change');
+                        } else {
+                            // If unchecked, remove from answers
+                            delete answers[`question_${question.id}`];
+                            console.log(`MCQ Single answer deselected for question_${question.id}`);
+                            console.log('Current answers object:', JSON.stringify(answers));
                         }
                     });
+                    
+                    answerContainer.appendChild(choiceOption);
                 });
             } else if (question.question_type === 'mcq_multiple') {
+                const answerTitle = document.createElement('div');
+                answerTitle.classList.add('answer-section-title');
+                answerTitle.textContent = 'Select all that apply:';
+                answerContainer.appendChild(answerTitle);
+                
                 // Multiple choice question
                 question.choices.forEach((choice, choiceIndex) => {
-                    const choiceDiv = document.createElement('div');
-                    choiceDiv.classList.add('form-check', 'mb-2');
-                    
-                    // Log the choice object to help with debugging
-                    console.log(`MCQ Multiple: Choice for question ${question.id}:`, choice);
-                    
-                    // Always use the actual choice ID from the database
-                    // This ensures we're using the actual database ID
                     const choiceId = choice.id;
                     
-                    choiceDiv.innerHTML = `
+                    const choiceOption = document.createElement('div');
+                    choiceOption.classList.add('choice-option');
+                    choiceOption.setAttribute('data-choice-id', choiceId);
+                    
+                    choiceOption.innerHTML = `
                         <input class="form-check-input" type="checkbox" name="question_${question.id}" id="choice_${question.id}_${choiceId}" value="${choiceId}">
                         <label class="form-check-label" for="choice_${question.id}_${choiceId}">
-                            ${choice.text}
+                            ${formatTextWithCode(choice.text)}
                         </label>
                     `;
-                    answerContainer.appendChild(choiceDiv);
                     
-                    // Add event listener to save answer
-                    const input = choiceDiv.querySelector('input');
+                    const input = choiceOption.querySelector('input');
+                    const label = choiceOption.querySelector('label');
+                    
+                    // Make entire div clickable - simplified and more reliable
+                    choiceOption.addEventListener('click', function(e) {
+                        // Don't prevent default for input/label clicks
+                        if (e.target === input || e.target === label || label.contains(e.target)) {
+                            return; // Let the natural input behavior handle it
+                        }
+
+                        // For div clicks, toggle the input
+                        e.preventDefault();
+                        e.stopPropagation();
+                        input.checked = !input.checked;
+                        input.dispatchEvent(new Event('change', { bubbles: true }));
+                    });
+
+                    // Add change event to update styling and save answer
                     input.addEventListener('change', function() {
-                        // Get all selected choices
+                        // Update selected styling
+                        if (this.checked) {
+                            choiceOption.classList.add('selected');
+                        } else {
+                            choiceOption.classList.remove('selected');
+                        }
+
+                        // Get all selected choices for this question
                         const checkboxes = document.querySelectorAll(`input[name="question_${question.id}"]:checked`);
                         const selected = Array.from(checkboxes).map(cb => {
-                            // Try to convert to integer, fall back to original value if NaN
                             const parsed = parseInt(cb.value);
                             return isNaN(parsed) ? cb.value : parsed;
                         });
+
+                        // Store the answer (empty array if nothing selected)
                         answers[`question_${question.id}`] = selected;
                         console.log(`MCQ Multiple answer updated for question_${question.id}:`, selected);
+                        console.log('Current answers object:', JSON.stringify(answers));
                         updateProgress();
                         logAnswersState('mcq_multiple_change');
                     });
+                    
+                    answerContainer.appendChild(choiceOption);
                 });
-                
-                answerContainer.appendChild(document.createElement('hr'));
-                answerContainer.appendChild(document.createElement('p')).textContent = 'Select all that apply.';
             } else if (question.question_type === 'text') {
+                const answerTitle = document.createElement('div');
+                answerTitle.classList.add('answer-section-title');
+                answerTitle.textContent = 'Type your answer:';
+                answerContainer.appendChild(answerTitle);
+                
                 // Text input question
                 const textDiv = document.createElement('div');
                 textDiv.classList.add('form-group');
                 textDiv.innerHTML = `
-                    <textarea class="form-control" id="question_${question.id}" rows="3" placeholder="Type your answer here..."></textarea>
+                    <textarea class="form-control form-control-lg" id="question_${question.id}" rows="4" placeholder="Type your answer here..." style="font-size: 1.05rem;"></textarea>
                 `;
                 answerContainer.appendChild(textDiv);
                 
                 // Add event listener to save answer
                 const textarea = textDiv.querySelector('textarea');
                 textarea.addEventListener('input', function() {
-                    answers[`question_${question.id}`] = this.value.trim(); // Trim to remove whitespace
+                    answers[`question_${question.id}`] = this.value.trim();
                     console.log(`Text answer updated for question_${question.id}:`, this.value);
                     updateProgress();
                     logAnswersState('text_input');
                 });
             } else if (question.question_type === 'true_false') {
-                // True/False question
-                const trueDiv = document.createElement('div');
-                trueDiv.classList.add('form-check', 'mb-2');
-                trueDiv.innerHTML = `
+                const answerTitle = document.createElement('div');
+                answerTitle.classList.add('answer-section-title');
+                answerTitle.textContent = 'Select true or false:';
+                answerContainer.appendChild(answerTitle);
+                
+                // True option
+                const trueOption = document.createElement('div');
+                trueOption.classList.add('choice-option');
+                trueOption.innerHTML = `
                     <input class="form-check-input" type="radio" name="question_${question.id}" id="true_${question.id}" value="true">
                     <label class="form-check-label" for="true_${question.id}">
-                        True
+                        <i class="bi bi-check-circle me-2"></i>True
                     </label>
                 `;
-                answerContainer.appendChild(trueDiv);
                 
-                const falseDiv = document.createElement('div');
-                falseDiv.classList.add('form-check', 'mb-2');
-                falseDiv.innerHTML = `
-                    <input class="form-check-input" type="radio" name="question_${question.id}" id="false_${question.id}" value="false">
-                    <label class="form-check-label" for="false_${question.id}">
-                        False
-                    </label>
-                `;
-                answerContainer.appendChild(falseDiv);
+                const trueInput = trueOption.querySelector('input');
                 
-                // Add event listeners to save answer
-                const trueInput = trueDiv.querySelector('input');
-                const falseInput = falseDiv.querySelector('input');
+                // Make entire div clickable - simplified and more reliable
+                trueOption.addEventListener('click', function(e) {
+                    // Don't prevent default for input/label clicks
+                    if (e.target === trueInput || e.target === trueOption.querySelector('label') || trueOption.querySelector('label').contains(e.target)) {
+                        return; // Let the natural input behavior handle it
+                    }
+
+                    // For div clicks, select true
+                    e.preventDefault();
+                    e.stopPropagation();
+                    trueInput.checked = true;
+                    trueInput.dispatchEvent(new Event('change', { bubbles: true }));
+                });
                 
                 trueInput.addEventListener('change', function() {
                     if (this.checked) {
-                        // Use string 'true' instead of boolean true to avoid serialization issues
+                        // Remove selected from false option
+                        answerContainer.querySelectorAll('.choice-option').forEach(opt => {
+                            opt.classList.remove('selected');
+                        });
+                        trueOption.classList.add('selected');
+                        
                         answers[`question_${question.id}`] = 'true';
                         console.log(`True/False answer set to TRUE for question_${question.id}`);
+                        console.log('Current answers object:', JSON.stringify(answers));
                         updateProgress();
                         logAnswersState('true_false_true');
                     }
                 });
                 
+                answerContainer.appendChild(trueOption);
+                
+                // False option
+                const falseOption = document.createElement('div');
+                falseOption.classList.add('choice-option');
+                falseOption.innerHTML = `
+                    <input class="form-check-input" type="radio" name="question_${question.id}" id="false_${question.id}" value="false">
+                    <label class="form-check-label" for="false_${question.id}">
+                        <i class="bi bi-x-circle me-2"></i>False
+                    </label>
+                `;
+                
+                const falseInput = falseOption.querySelector('input');
+                
+                // Make entire div clickable - simplified and more reliable
+                falseOption.addEventListener('click', function(e) {
+                    // Don't prevent default for input/label clicks
+                    if (e.target === falseInput || e.target === falseOption.querySelector('label') || falseOption.querySelector('label').contains(e.target)) {
+                        return; // Let the natural input behavior handle it
+                    }
+
+                    // For div clicks, select false
+                    e.preventDefault();
+                    e.stopPropagation();
+                    falseInput.checked = true;
+                    falseInput.dispatchEvent(new Event('change', { bubbles: true }));
+                });
+                
                 falseInput.addEventListener('change', function() {
                     if (this.checked) {
-                        // Use string 'false' instead of boolean false to avoid serialization issues
+                        // Remove selected from true option
+                        answerContainer.querySelectorAll('.choice-option').forEach(opt => {
+                            opt.classList.remove('selected');
+                        });
+                        falseOption.classList.add('selected');
+                        
                         answers[`question_${question.id}`] = 'false';
                         console.log(`True/False answer set to FALSE for question_${question.id}`);
+                        console.log('Current answers object:', JSON.stringify(answers));
                         updateProgress();
                         logAnswersState('true_false_false');
                     }
                 });
+                
+                answerContainer.appendChild(falseOption);
             }
             
             questionDiv.appendChild(answerContainer);

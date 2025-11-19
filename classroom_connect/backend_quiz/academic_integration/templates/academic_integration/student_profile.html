@@ -2,73 +2,353 @@
 
 {% block title %}Edit Profile - {{ student_name }}{% endblock %}
 
+{% block extra_head %}
+<style>
+    .profile-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 2rem;
+        border-radius: 10px 10px 0 0;
+        margin-bottom: 0;
+    }
+    
+    .profile-avatar {
+        width: 80px;
+        height: 80px;
+        background: white;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 2rem;
+        color: #667eea;
+        font-weight: bold;
+        margin-bottom: 0.75rem;
+    }
+    
+    .profile-card {
+        border: none;
+        border-radius: 10px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        transition: transform 0.2s, box-shadow 0.2s;
+    }
+    
+    .profile-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+    }
+    
+    .info-item {
+        padding: 0.75rem;
+        background: #f8f9fa;
+        border-radius: 8px;
+        border-left: 3px solid #667eea;
+    }
+    
+    .password-strength {
+        height: 6px;
+        margin-top: 0.5rem;
+        border-radius: 3px;
+        transition: all 0.3s ease;
+        background: #e9ecef;
+    }
+    
+    .password-strength.weak {
+        width: 33%;
+        background-color: #dc3545;
+    }
+    
+    .password-strength.medium {
+        width: 66%;
+        background-color: #ffc107;
+    }
+    
+    .password-strength.strong {
+        width: 100%;
+        background-color: #28a745;
+    }
+    
+    .card-header {
+        padding: 1rem 1.5rem;
+    }
+    
+    .card-header h5 {
+        font-weight: 600;
+    }
+    
+    .form-label {
+        margin-bottom: 0.5rem;
+    }
+    
+    .form-control-lg {
+        padding: 0.75rem 1rem;
+        font-size: 1rem;
+    }
+    
+    .btn-lg {
+        padding: 0.75rem 1.5rem;
+        font-size: 1.1rem;
+        font-weight: 500;
+    }
+    
+    .form-check-input:checked {
+        background-color: #667eea;
+        border-color: #667eea;
+    }
+    
+    input[readonly] {
+        background-color: #f8f9fa;
+        cursor: not-allowed;
+    }
+    
+    @media (max-width: 991px) {
+        .profile-avatar {
+            width: 60px;
+            height: 60px;
+            font-size: 1.5rem;
+        }
+        
+        .profile-header {
+            padding: 1.5rem;
+        }
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="container mt-4">
+<div class="container mt-4 mb-5">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h1>Edit Your Profile</h1>
+        <h1><i class="bi bi-person-circle me-2"></i>My Profile</h1>
         <a href="{% url 'academic_integration:student_dashboard' %}" class="btn btn-outline-secondary">
-            <i class="fas fa-arrow-left"></i> Back to Dashboard
+            <i class="bi bi-arrow-left"></i> Back to Dashboard
         </a>
     </div>
     
-    <div class="row justify-content-center">
-        <div class="col-lg-8">
-            <div class="card shadow">
-                <div class="card-header bg-primary text-white">
-                    <h5 class="mb-0">Student Information</h5>
+    {% if api_error %}
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            <i class="bi bi-exclamation-triangle-fill me-2"></i>
+            <strong>API Error:</strong> {{ api_error }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    {% endif %}
+    
+    <div class="row">
+        <!-- Left Column - Profile Card -->
+        <div class="col-lg-4 mb-4">
+            <div class="card profile-card">
+                <div class="profile-header text-center">
+                    <div class="profile-avatar mx-auto">
+                        {{ student_name|slice:":1"|upper }}
+                    </div>
+                    <h3 class="mb-1">{{ student_name }}</h3>
+                    <p class="mb-0 opacity-75">{{ student_roll_number }}</p>
                 </div>
                 <div class="card-body">
-                    {% if api_error %}
-                        <div class="alert alert-danger">
-                            <i class="fas fa-exclamation-triangle"></i> {{ api_error }}
-                        </div>
-                    {% endif %}
+                    <h6 class="text-muted text-uppercase mb-3">Profile Info</h6>
                     
-                    <form method="post" action="{% url 'academic_integration:student_profile' %}">
+                    <div class="info-item mb-3">
+                        <div class="d-flex align-items-center mb-2">
+                            <i class="bi bi-person-badge text-primary me-2"></i>
+                            <small class="text-muted">Roll Number</small>
+                        </div>
+                        <strong>{{ student_roll_number }}</strong>
+                    </div>
+                    
+                    <div class="info-item mb-3">
+                        <div class="d-flex align-items-center mb-2">
+                            <i class="bi bi-envelope text-primary me-2"></i>
+                            <small class="text-muted">Email</small>
+                        </div>
+                        <strong>{{ student_email|default:"Not set" }}</strong>
+                    </div>
+                    
+                    <div class="info-item mb-3">
+                        <div class="d-flex align-items-center mb-2">
+                            <i class="bi bi-bell text-primary me-2"></i>
+                            <small class="text-muted">Notifications</small>
+                        </div>
+                        <strong>
+                            {% if email_notifications %}
+                                <span class="badge bg-success">Enabled</span>
+                            {% else %}
+                                <span class="badge bg-secondary">Disabled</span>
+                            {% endif %}
+                        </strong>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Help Card -->
+            <div class="card mt-4 border-0 shadow-sm">
+                <div class="card-body">
+                    <h6 class="d-flex align-items-center mb-3">
+                        <i class="bi bi-info-circle-fill text-primary me-2"></i>
+                        Need Help?
+                    </h6>
+                    <p class="small mb-2">
+                        <strong>Forgot password?</strong><br>
+                        Contact your course coordinator.
+                    </p>
+                    <p class="small mb-2">
+                        <strong>Update name/roll number?</strong><br>
+                        Visit the academic office.
+                    </p>
+                    <p class="small mb-0">
+                        <strong>Technical issues?</strong><br>
+                        Email: <a href="mailto:support@example.edu">support@example.edu</a>
+                    </p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Right Column - Forms -->
+        <div class="col-lg-8">
+            <!-- General Information Form -->
+            <div class="card profile-card mb-4">
+                <div class="card-header bg-white border-bottom">
+                    <h5 class="mb-0">
+                        <i class="bi bi-person-fill text-primary me-2"></i>
+                        General Information
+                    </h5>
+                </div>
+                <div class="card-body p-4">
+                    <form method="post" action="{% url 'academic_integration:student_profile' %}" id="generalInfoForm">
+                    <form method="post" action="{% url 'academic_integration:student_profile' %}" id="generalInfoForm">
                         {% csrf_token %}
+                        <input type="hidden" name="form_type" value="general_info">
                         
-                        <div class="mb-3">
-                            <label for="student_name" class="form-label">Full Name</label>
-                            <input type="text" class="form-control" id="student_name" name="student_name" value="{{ student_name }}" {% if not allow_name_edit %}readonly{% endif %}>
-                            {% if not allow_name_edit %}<small class="form-text text-muted">Name changes must be processed through the academic office.</small>{% endif %}
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="student_name" class="form-label fw-semibold">
+                                    Full Name
+                                    <i class="bi bi-lock-fill text-muted ms-1" data-bs-toggle="tooltip" title="Name changes require admin approval"></i>
+                                </label>
+                                <input type="text" 
+                                       class="form-control form-control-lg" 
+                                       id="student_name" 
+                                       name="student_name" 
+                                       value="{{ student_name }}" 
+                                       readonly>
+                                <small class="form-text text-muted">
+                                    <i class="bi bi-info-circle"></i> Contact academic office for name changes
+                                </small>
+                            </div>
+                            
+                            <div class="col-md-6 mb-3">
+                                <label for="student_roll_number" class="form-label fw-semibold">
+                                    Roll Number
+                                    <i class="bi bi-lock-fill text-muted ms-1" data-bs-toggle="tooltip" title="Roll numbers cannot be changed"></i>
+                                </label>
+                                <input type="text" 
+                                       class="form-control form-control-lg" 
+                                       id="student_roll_number" 
+                                       value="{{ student_roll_number }}" 
+                                       readonly>
+                                <small class="form-text text-muted">
+                                    <i class="bi bi-shield-check"></i> Your unique identifier
+                                </small>
+                            </div>
                         </div>
                         
                         <div class="mb-3">
-                            <label for="student_roll_number" class="form-label">Roll Number</label>
-                            <input type="text" class="form-control" id="student_roll_number" value="{{ student_roll_number }}" readonly>
-                            <small class="form-text text-muted">Roll numbers cannot be changed.</small>
+                            <label for="student_email" class="form-label fw-semibold">
+                                Email Address
+                                <span class="text-danger">*</span>
+                            </label>
+                            <input type="email" 
+                                   class="form-control form-control-lg" 
+                                   id="student_email" 
+                                   name="student_email" 
+                                   value="{{ student_email|default:'' }}"
+                                   required
+                                   pattern="[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$">
+                            <small class="form-text text-muted">
+                                <i class="bi bi-envelope"></i> Used for notifications and account recovery
+                            </small>
                         </div>
                         
-                        <div class="mb-3">
-                            <label for="student_email" class="form-label">Email</label>
-                            <input type="email" class="form-control" id="student_email" name="student_email" value="{{ student_email|default:'' }}">
-                        </div>
-                        
-                        <div class="mb-3">
-                            <label for="student_password" class="form-label">Change Password</label>
-                            <input type="password" class="form-control" id="student_password" name="student_password" placeholder="Leave blank to keep current password">
-                        </div>
-                        
-                        <div class="mb-3">
-                            <label for="student_password_confirm" class="form-label">Confirm Password</label>
-                            <input type="password" class="form-control" id="student_password_confirm" name="student_password_confirm" placeholder="Confirm new password">
-                        </div>
-                        
-                        <hr>
-                        
-                        <div class="mb-3">
-                            <label class="form-label">Preferences</label>
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" id="email_notifications" name="email_notifications" {% if email_notifications %}checked{% endif %}>
+                        <div class="mb-4">
+                            <label class="form-label fw-semibold">Notification Preferences</label>
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" 
+                                       type="checkbox" 
+                                       id="email_notifications" 
+                                       name="email_notifications" 
+                                       {% if email_notifications %}checked{% endif %}>
                                 <label class="form-check-label" for="email_notifications">
-                                    Receive email notifications for new quizzes
+                                    Receive email notifications about new quizzes and updates
                                 </label>
                             </div>
                         </div>
                         
+                        <div class="d-grid">
+                            <button type="submit" class="btn btn-primary btn-lg" id="generalInfoBtn">
+                                <i class="bi bi-check-circle me-2"></i> Save Changes
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            
+            <!-- Change Password Form -->
+            <div class="card profile-card">
+                <div class="card-header bg-white border-bottom">
+                    <h5 class="mb-0">
+                        <i class="bi bi-shield-lock-fill text-primary me-2"></i>
+                        Change Password
+                    </h5>
+                </div>
+                <div class="card-body p-4">
+                    <div class="alert alert-info mb-4">
+                        <i class="bi bi-info-circle-fill me-2"></i>
+                        Use this form to update your account password. Make sure to use a strong password.
+                    </div>
+                    
+                    <form method="post" action="{% url 'academic_integration:student_profile' %}" id="passwordForm">
+                        {% csrf_token %}
+                        <input type="hidden" name="form_type" value="change_password">
+                        
+                        <div class="mb-3">
+                            <label for="student_password" class="form-label fw-semibold">New Password</label>
+                            <div class="input-group input-group-lg">
+                                <input type="password" 
+                                       class="form-control" 
+                                       id="student_password" 
+                                       name="student_password" 
+                                       placeholder="Enter new password"
+                                       minlength="6"
+                                       required>
+                                <button class="btn btn-outline-secondary" 
+                                        type="button" 
+                                        id="togglePassword"
+                                        title="Toggle password visibility"
+                                        aria-label="Toggle password visibility">
+                                    <i class="bi bi-eye"></i>
+                                </button>
+                            </div>
+                            <div id="passwordStrength" class="password-strength mt-2"></div>
+                            <small class="form-text text-muted">
+                                <i class="bi bi-key"></i> Minimum 6 characters. Use a mix of letters, numbers, and symbols for a strong password.
+                            </small>
+                        </div>
+                        
+                        <div class="mb-4">
+                            <label for="student_password_confirm" class="form-label fw-semibold">Confirm New Password</label>
+                            <input type="password" 
+                                   class="form-control form-control-lg" 
+                                   id="student_password_confirm" 
+                                   name="student_password_confirm" 
+                                   placeholder="Re-enter your new password"
+                                   required>
+                            <div id="passwordMatch" class="mt-2"></div>
+                        </div>
+                        
                         <div class="d-grid gap-2">
-                            <button type="submit" class="btn btn-primary">
-                                <i class="fas fa-save"></i> Save Changes
+                            <button type="submit" class="btn btn-warning btn-lg" id="passwordBtn">
+                                <i class="bi bi-key-fill me-2"></i> Update Password
+                            </button>
+                            <button type="reset" class="btn btn-outline-secondary">
+                                <i class="bi bi-x-circle me-2"></i> Cancel
                             </button>
                         </div>
                     </form>
@@ -77,4 +357,122 @@
         </div>
     </div>
 </div>
+
+<script>
+    // Initialize tooltips
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl)
+    });
+    
+    // Password visibility toggle
+    document.getElementById('togglePassword').addEventListener('click', function() {
+        const passwordInput = document.getElementById('student_password');
+        const icon = this.querySelector('i');
+        
+        if (passwordInput.type === 'password') {
+            passwordInput.type = 'text';
+            icon.classList.remove('bi-eye');
+            icon.classList.add('bi-eye-slash');
+        } else {
+            passwordInput.type = 'password';
+            icon.classList.remove('bi-eye-slash');
+            icon.classList.add('bi-eye');
+        }
+    });
+    
+    // Password strength checker
+    document.getElementById('student_password').addEventListener('input', function() {
+        const password = this.value;
+        const strengthBar = document.getElementById('passwordStrength');
+        
+        if (password.length === 0) {
+            strengthBar.className = 'password-strength mt-2';
+            return;
+        }
+        
+        let strength = 0;
+        let strengthText = '';
+        
+        if (password.length >= 6) strength++;
+        if (password.length >= 10) strength++;
+        if (/[a-z]/.test(password) && /[A-Z]/.test(password)) strength++;
+        if (/\d/.test(password)) strength++;
+        if (/[^a-zA-Z0-9]/.test(password)) strength++;
+        
+        strengthBar.className = 'password-strength mt-2';
+        if (strength <= 2) {
+            strengthBar.classList.add('weak');
+            strengthText = 'Weak';
+        } else if (strength <= 3) {
+            strengthBar.classList.add('medium');
+            strengthText = 'Medium';
+        } else {
+            strengthBar.classList.add('strong');
+            strengthText = 'Strong';
+        }
+        
+        strengthBar.innerHTML = '<small class="text-muted">Password Strength: <strong>' + strengthText + '</strong></small>';
+    });
+    
+    // Password match validator
+    document.getElementById('student_password_confirm').addEventListener('input', function() {
+        const password = document.getElementById('student_password').value;
+        const confirm = this.value;
+        const matchDiv = document.getElementById('passwordMatch');
+        
+        if (confirm.length === 0) {
+            matchDiv.innerHTML = '';
+            return;
+        }
+        
+        if (password === confirm) {
+            matchDiv.innerHTML = '<small class="text-success"><i class="bi bi-check-circle-fill"></i> Passwords match</small>';
+        } else {
+            matchDiv.innerHTML = '<small class="text-danger"><i class="bi bi-x-circle-fill"></i> Passwords do not match</small>';
+        }
+    });
+    
+    // General Info Form validation
+    document.getElementById('generalInfoForm').addEventListener('submit', function(e) {
+        const email = document.getElementById('student_email').value;
+        
+        // Validate email
+        if (!email || !email.match(/[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/)) {
+            e.preventDefault();
+            alert('Please enter a valid email address');
+            return;
+        }
+        
+        // Show loading state
+        const submitBtn = document.getElementById('generalInfoBtn');
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Saving...';
+    });
+    
+    // Password Form validation
+    document.getElementById('passwordForm').addEventListener('submit', function(e) {
+        const password = document.getElementById('student_password').value;
+        const confirm = document.getElementById('student_password_confirm').value;
+        
+        // Validate password match
+        if (password !== confirm) {
+            e.preventDefault();
+            alert('Passwords do not match!');
+            return;
+        }
+        
+        // Validate password length
+        if (password.length < 6) {
+            e.preventDefault();
+            alert('Password must be at least 6 characters long');
+            return;
+        }
+        
+        // Show loading state
+        const submitBtn = document.getElementById('passwordBtn');
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Updating Password...';
+    });
+</script>
 {% endblock %}
